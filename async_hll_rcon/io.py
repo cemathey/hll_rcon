@@ -1,24 +1,62 @@
 import os
 from itertools import cycle
-from typing import Iterable
+from typing import Iterable, Self
 
 import trio
 from loguru import logger
 
 
 class HllConnection:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, ip_addr: str, port: int, password: str) -> None:
+        self.ip_addr = ip_addr
+        self.port = int(port)
+        self.password = password
+        self.xor_key: bytes | None = None
+        self.connection: trio.SocketStream
+
+    @classmethod
+    async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
+        instance = HllConnection(ip_addr, port, password)
+
+        await instance.connect()
+
+        return instance
+
+    async def connect(self):
+        logger.info(
+            f"Connecting {id(self)} to {self.ip_addr}:{self.port} {self.password=}"
+        )
+
+        with trio.move_on_after(5):
+            self.connection = await trio.open_tcp_stream(self.ip_addr, self.port)
+            logger.info(f"Connected")
+            self.xor_key = await self.connection.receive_some()
+
+        logger.info(f"{self.xor_key=}")
+        # async with self.connection:
+        #     async for data in self.connection:
+        #         print(f"got: {data!r}")
+        #     print(f"connection closed")
+
+        logger.info(self.connection)
 
 
 class AsyncRcon:
     """"""
 
-    def __init__(self, ip_addr: str, port: str, password: str) -> None:
+    def __init__(
+        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
+    ) -> None:
         self.ip_addr = ip_addr
         self.port = int(port)
         self.password = password
-        self.xor_key: bytes
+        self.connection_pool_size = connection_pool_size
+
+    async def setup(self):
+        self._connections: list[HllConnection] = [
+            await HllConnection.setup(self.ip_addr, self.port, self.password)
+            for _ in range(self.connection_pool_size)
+        ]
 
     @classmethod
     def _xor_encode(
@@ -40,19 +78,6 @@ class AsyncRcon:
         """XOR decrypt the given cipher text with the given XOR key"""
 
         return cls._xor_encode(cipher_text, xor_key).decode("utf-8")
-
-    async def connect(self):
-        logger.info(f"Connecting to {self.ip_addr}:{self.port} {self.password=}")
-        self.connection = await trio.open_tcp_stream(self.ip_addr, self.port)
-        xor_key = await self.connection.receive_some()
-        print(f"{xor_key=}")
-        print(f"{bytes.decode(xor_key)=}")
-        # async with self.connection:
-        #     async for data in self.connection:
-        #         print(f"got: {data!r}")
-        #     print(f"connection closed")
-
-        print(self.connection)
 
     async def login(self):
         raise NotImplementedError
@@ -257,10 +282,8 @@ async def main():
         os.getenv("RCON_PASSWORD"),
     )
     rcon = AsyncRcon(host, port, password)
+    await rcon.setup()
     # await rcon.connect()
-
-    cipher_text = xor_encode("asdf", b"XOR")
-    print(xor_decode(cipher_text, b"XOR"))
 
 
 if __name__ == "__main__":
