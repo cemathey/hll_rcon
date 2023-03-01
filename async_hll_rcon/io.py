@@ -1,4 +1,9 @@
+import os
+from itertools import cycle
 from typing import Iterable
+
+import trio
+from loguru import logger
 
 
 class HllConnection:
@@ -9,8 +14,45 @@ class HllConnection:
 class AsyncRcon:
     """"""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, ip_addr: str, port: str, password: str) -> None:
+        self.ip_addr = ip_addr
+        self.port = int(port)
+        self.password = password
+        self.xor_key: bytes
+
+    @classmethod
+    def _xor_encode(
+        cls, message: str | bytes, xor_key: bytes, encoding: str = "utf-8"
+    ) -> bytes:
+        """XOR encrypt the given message with the given XOR key"""
+        if isinstance(message, str):
+            message = message.encode(encoding=encoding)
+
+        return bytes(
+            [
+                message_char ^ xor_char
+                for message_char, xor_char in zip(message, cycle(xor_key))
+            ]
+        )
+
+    @classmethod
+    def _xor_decode(cls, cipher_text: str | bytes, xor_key: bytes) -> str:
+        """XOR decrypt the given cipher text with the given XOR key"""
+
+        return cls._xor_encode(cipher_text, xor_key).decode("utf-8")
+
+    async def connect(self):
+        logger.info(f"Connecting to {self.ip_addr}:{self.port} {self.password=}")
+        self.connection = await trio.open_tcp_stream(self.ip_addr, self.port)
+        xor_key = await self.connection.receive_some()
+        print(f"{xor_key=}")
+        print(f"{bytes.decode(xor_key)=}")
+        # async with self.connection:
+        #     async for data in self.connection:
+        #         print(f"got: {data!r}")
+        #     print(f"connection closed")
+
+        print(self.connection)
 
     async def login(self):
         raise NotImplementedError
@@ -206,3 +248,20 @@ class AsyncRcon:
 
     async def uncensor_words(self, words: str):
         raise NotImplementedError
+
+
+async def main():
+    host, port, password = (
+        os.getenv("RCON_HOST"),
+        os.getenv("RCON_PORT"),
+        os.getenv("RCON_PASSWORD"),
+    )
+    rcon = AsyncRcon(host, port, password)
+    # await rcon.connect()
+
+    cipher_text = xor_encode("asdf", b"XOR")
+    print(xor_decode(cipher_text, b"XOR"))
+
+
+if __name__ == "__main__":
+    trio.run(main)
