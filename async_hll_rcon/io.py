@@ -42,6 +42,7 @@ class HllConnection:
 
     @classmethod
     async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
+        """Create and return an instance after it has connected to the game server"""
         instance = HllConnection(ip_addr, port, password)
         await instance.connect()
         return instance
@@ -65,8 +66,14 @@ class HllConnection:
 
     async def connect(self):
         while self._connection is None:
+            # TODO: This is probably dumb and connection raises a ValueError if it
+            # isn't connected, should probably catch that and try up to a user
+            # configurable number of retries or timeout or both to re-connect this socket
+            # before failing
             await self._connect()
 
+        # The very first thing the game server will return is the XOR key that all
+        # subsequent requests require
         with trio.move_on_after(TCP_TIMEOUT):
             logger.debug(f"{id(self)} Getting XOR key in {id(self)}")
             self._xor_key = await self.connection.receive_some()
@@ -79,6 +86,7 @@ class HllConnection:
             logger.debug(f"{id(self)} Logged in")
 
     async def _send(self, content: str):
+        """XOR the content and sendd to the game server, returning the game server response"""
         logger.debug(f"{id(self)} Sending {content=} to the game server")
         xored_content = HllConnection._xor_encode(content, self.xor_key)
         with trio.move_on_after(TCP_TIMEOUT):
@@ -91,20 +99,206 @@ class HllConnection:
         content = f"Login {self.password}"
         return await self._send(content)
 
-    async def get_vip_ids(self):
-        logger.debug(f"{id(self)} HllConnection.get_vip_ids()")
-        content = f"Get VipIds"
+    async def get_server_name(self):
+        raise NotImplementedError
+
+    async def get_current_max_player_slots(self):
+        raise NotImplementedError
+
+    async def get_gamestate(self):
+        raise NotImplementedError
+
+    async def get_max_queue_size(self):
+        logger.debug(f"{id(self)} HllConnection.get_max_queue_size()")
+        content = f"Get MaxQueuedPlayers"
         return await self._send(content)
+
+    async def set_max_queue_size(self, size: int):
+        raise NotImplementedError
 
     async def get_num_vip_slots(self):
         logger.debug(f"{id(self)} HllConnection.get_num_vip_slots()")
         content = f"Get NumVipSlots"
         return await self._send(content)
 
-    async def get_max_queue_size(self):
-        logger.debug(f"{id(self)} HllConnection.get_max_queue_size()")
-        content = f"Get MaxQueuedPlayers"
+    async def set_num_vip_slots(self, amount: int):
+        raise NotImplementedError
+
+    async def set_welcome_message(self, message: str):
+        raise NotImplementedError
+
+    async def set_broadcast_message(self, message: str | None):
+        raise NotImplementedError
+
+    async def reset_broadcast_message(self):
+        raise NotImplementedError
+
+    async def get_game_logs(self, minutes: int, filter: str):
+        raise NotImplementedError
+
+    async def get_current_map(self):
+        raise NotImplementedError
+
+    async def get_available_maps(self):
+        raise NotImplementedError
+
+    async def get_map_rotation(self):
+        raise NotImplementedError
+
+    async def add_map_to_rotation(
+        self,
+        name: str,
+        after_map_name: str | None,
+        after_map_ordinal: int | None = 1,
+    ):
+        raise NotImplementedError
+
+    async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
+        raise NotImplementedError
+
+    async def set_current_map(self, name: str, ordinal: int | None = 1):
+        raise NotImplementedError
+
+    async def get_players(self):
+        raise NotImplementedError
+
+    async def get_player_steam_ids(self):
+        raise NotImplementedError
+
+    async def get_admin_ids(self):
+        raise NotImplementedError
+
+    async def get_admin_groups(self):
+        raise NotImplementedError
+
+    async def get_vip_ids(self):
+        logger.debug(f"{id(self)} HllConnection.get_vip_ids()")
+        content = f"Get VipIds"
         return await self._send(content)
+
+    async def get_player_info(self, player_name: str):
+        raise NotImplementedError
+
+    async def add_admin(self, steam_id_64: str, role: str, name: str | None):
+        raise NotImplementedError
+
+    async def remove_admin(self, steam_id_64: str):
+        raise NotImplementedError
+
+    async def add_vip(self, steam_id_64: str, name: str | None):
+        raise NotImplementedError
+
+    async def remove_vip(self, steam_id_64: str):
+        raise NotImplementedError
+
+    async def get_temp_bans(self):
+        raise NotImplementedError
+
+    async def get_permanent_bans(self):
+        raise NotImplementedError
+
+    async def message_player(
+        self, steam_id_64: str | None, player_name: str | None, message: str
+    ):
+        raise NotImplementedError
+
+    async def punish_player(self, player_name: str, reason: str | None):
+        raise NotImplementedError
+
+    async def switch_player_on_death(self, player_name: str):
+        raise NotImplementedError
+
+    async def switch_player_now(self, player_name: str):
+        raise NotImplementedError
+
+    async def kick_player(self, player_name: str, reason: str | None):
+        raise NotImplementedError
+
+    async def temp_ban_player(
+        self,
+        steam_id_64: str | None,
+        player_name: str | None,
+        duration: int | None,
+        reason: str | None,
+        by_admin_name: str | None,
+    ):
+        raise NotImplementedError
+
+    async def perma_ban_player(
+        self,
+        steam_id_64: str | None,
+        player_name: str | None,
+        duration: int | None,
+        reason: str | None,
+        by_admin_name: str | None,
+    ):
+        raise NotImplementedError
+
+    async def remove_temp_ban(self, ban_log: str):
+        raise NotImplementedError
+
+    async def remove_perma_ban(self, ban_log: str):
+        raise NotImplementedError
+
+    async def get_idle_kick_time(self):
+        raise NotImplementedError
+
+    async def set_idle_kick_time(self, threshold_minutes: int):
+        raise NotImplementedError
+
+    async def get_high_ping_limit(self):
+        raise NotImplementedError
+
+    async def set_high_ping_limit(self, threshold: int):
+        raise NotImplementedError
+
+    async def get_team_switch_cooldown(self):
+        raise NotImplementedError
+
+    async def set_team_switch_cooldown(self, cooldown: int):
+        raise NotImplementedError
+
+    async def get_auto_balance_enabled(self):
+        raise NotImplementedError
+
+    async def enable_auto_balance(self):
+        raise NotImplementedError
+
+    async def disable_auto_balance(self):
+        raise NotImplementedError
+
+    async def get_auto_balance_threshold(self):
+        raise NotImplementedError
+
+    async def set_auto_balance_threshold(self, threshold: int):
+        raise NotImplementedError
+
+    async def get_vote_kick_enabled(self):
+        raise NotImplementedError
+
+    async def enable_vote_kick(self):
+        raise NotImplementedError
+
+    async def disable_vote_kick(self):
+        raise NotImplementedError
+
+    async def get_vote_kick_threshold(self):
+        raise NotImplementedError
+
+    async def set_vote_kick_threshold(self, thresholds: Iterable[tuple[int, int]]):
+        raise NotImplementedError
+
+    async def reset_vote_kick_threshold(self):
+        raise NotImplementedError
+
+    async def get_censored_words(self):
+        raise NotImplementedError
+
+    async def censor_words(self, words: str):
+        raise NotImplementedError
+
+    async def uncensor_words(self, words: str):
+        raise NotImplementedError
 
 
 class AsyncRcon:
@@ -153,10 +347,10 @@ class AsyncRcon:
             result = await conn.login()
             logger.debug(f"{id(self)} login {result=}")
 
-    async def get_name(self):
+    async def get_server_name(self):
         raise NotImplementedError
 
-    async def get_slots(self):
+    async def get_current_max_player_slots(self):
         raise NotImplementedError
 
     async def get_gamestate(self):
@@ -181,13 +375,16 @@ class AsyncRcon:
     async def set_welcome_message(self, message: str):
         raise NotImplementedError
 
-    async def broadcast(self, message: str | None):
+    async def set_broadcast_message(self, message: str | None):
+        raise NotImplementedError
+
+    async def reset_broadcast_message(self):
         raise NotImplementedError
 
     async def get_game_logs(self, minutes: int, filter: str):
         raise NotImplementedError
 
-    async def get_map(self):
+    async def get_current_map(self):
         raise NotImplementedError
 
     async def get_available_maps(self):
@@ -291,37 +488,25 @@ class AsyncRcon:
     async def remove_perma_ban(self, ban_log: str):
         raise NotImplementedError
 
-    async def get_idle_time(self):
-        raise NotImplementedError
-
-    async def get_high_ping_limit(self):
-        raise NotImplementedError
-
-    async def get_team_switch_cooldown(self):
-        raise NotImplementedError
-
-    async def get_auto_balance_enabled(self):
-        raise NotImplementedError
-
-    async def get_auto_balance_threshold(self):
-        raise NotImplementedError
-
-    async def get_vote_kick_enabled(self):
-        raise NotImplementedError
-
-    async def get_vote_kick_threshold(self):
-        raise NotImplementedError
-
-    async def get_censored_words(self):
+    async def get_idle_kick_time(self):
         raise NotImplementedError
 
     async def set_idle_kick_time(self, threshold_minutes: int):
         raise NotImplementedError
 
+    async def get_high_ping_limit(self):
+        raise NotImplementedError
+
     async def set_high_ping_limit(self, threshold: int):
         raise NotImplementedError
 
+    async def get_team_switch_cooldown(self):
+        raise NotImplementedError
+
     async def set_team_switch_cooldown(self, cooldown: int):
+        raise NotImplementedError
+
+    async def get_auto_balance_enabled(self):
         raise NotImplementedError
 
     async def enable_auto_balance(self):
@@ -330,7 +515,13 @@ class AsyncRcon:
     async def disable_auto_balance(self):
         raise NotImplementedError
 
+    async def get_auto_balance_threshold(self):
+        raise NotImplementedError
+
     async def set_auto_balance_threshold(self, threshold: int):
+        raise NotImplementedError
+
+    async def get_vote_kick_enabled(self):
         raise NotImplementedError
 
     async def enable_vote_kick(self):
@@ -339,10 +530,16 @@ class AsyncRcon:
     async def disable_vote_kick(self):
         raise NotImplementedError
 
+    async def get_vote_kick_threshold(self):
+        raise NotImplementedError
+
     async def set_vote_kick_threshold(self, thresholds: Iterable[tuple[int, int]]):
         raise NotImplementedError
 
     async def reset_vote_kick_threshold(self):
+        raise NotImplementedError
+
+    async def get_censored_words(self):
         raise NotImplementedError
 
     async def censor_words(self, words: str):
