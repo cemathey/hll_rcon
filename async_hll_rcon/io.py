@@ -1,9 +1,12 @@
 import os
+from contextlib import asynccontextmanager
 from itertools import cycle
-from typing import Iterable, Self
+from typing import AsyncGenerator, Iterable, Self
 
 import trio
 from loguru import logger
+
+TCP_TIMEOUT = 10
 
 
 class HllConnection:
@@ -11,52 +14,9 @@ class HllConnection:
         self.ip_addr = ip_addr
         self.port = int(port)
         self.password = password
-        self.xor_key: bytes | None = None
-        self.connection: trio.SocketStream
-
-    @classmethod
-    async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
-        instance = HllConnection(ip_addr, port, password)
-
-        await instance.connect()
-
-        return instance
-
-    async def connect(self):
-        logger.info(
-            f"Connecting {id(self)} to {self.ip_addr}:{self.port} {self.password=}"
-        )
-
-        with trio.move_on_after(5):
-            self.connection = await trio.open_tcp_stream(self.ip_addr, self.port)
-            logger.info(f"Connected")
-            self.xor_key = await self.connection.receive_some()
-
-        logger.info(f"{self.xor_key=}")
-        # async with self.connection:
-        #     async for data in self.connection:
-        #         print(f"got: {data!r}")
-        #     print(f"connection closed")
-
-        logger.info(self.connection)
-
-
-class AsyncRcon:
-    """"""
-
-    def __init__(
-        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
-    ) -> None:
-        self.ip_addr = ip_addr
-        self.port = int(port)
-        self.password = password
-        self.connection_pool_size = connection_pool_size
-
-    async def setup(self):
-        self._connections: list[HllConnection] = [
-            await HllConnection.setup(self.ip_addr, self.port, self.password)
-            for _ in range(self.connection_pool_size)
-        ]
+        self._xor_key: bytes
+        self._connection: trio.SocketStream | None = None
+        self.logged_in = False
 
     @classmethod
     def _xor_encode(
@@ -76,11 +36,122 @@ class AsyncRcon:
     @classmethod
     def _xor_decode(cls, cipher_text: str | bytes, xor_key: bytes) -> str:
         """XOR decrypt the given cipher text with the given XOR key"""
-
         return cls._xor_encode(cipher_text, xor_key).decode("utf-8")
 
+    @classmethod
+    async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
+        instance = HllConnection(ip_addr, port, password)
+        await instance.connect()
+        return instance
+
+    @property
+    def xor_key(self):
+        return self._xor_key
+
+    @property
+    def connection(self) -> trio.SocketStream:
+        if self._connection is not None:
+            return self._connection
+        else:
+            raise ValueError("Invalid Connection")
+
+    async def _connect(self):
+        with trio.move_on_after(TCP_TIMEOUT):
+            logger.debug(f"{id(self)} Opening socket")
+            self._connection = await trio.open_tcp_stream(self.ip_addr, self.port)
+            logger.debug(f"{id(self)} Socket open")
+
+    async def connect(self):
+        while self._connection is None:
+            await self._connect()
+
+        with trio.move_on_after(TCP_TIMEOUT):
+            logger.debug(f"{id(self)} Getting XOR key in {id(self)}")
+            self._xor_key = await self.connection.receive_some()
+            logger.debug(f"{id(self)} Got XOR key={self.xor_key} in {id(self)}")
+
+        with trio.move_on_after(TCP_TIMEOUT):
+            logger.debug(f"{id(self)} Logging in")
+            await self.login()
+            # logger.debug(self.connection)
+            logger.debug(f"{id(self)} Logged in")
+
+    async def _send(self, content: str):
+        logger.debug(f"{id(self)} Sending {content=} to the game server")
+        xored_content = HllConnection._xor_encode(content, self.xor_key)
+        with trio.move_on_after(TCP_TIMEOUT):
+            await self.connection.send_all(xored_content)
+            result = await self.connection.receive_some()
+            return HllConnection._xor_decode(result, self.xor_key)
+
     async def login(self):
-        raise NotImplementedError
+        logger.debug(f"{id(self)} HllConnection.login()")
+        content = f"Login {self.password}"
+        return await self._send(content)
+
+    async def get_vip_ids(self):
+        logger.debug(f"{id(self)} HllConnection.get_vip_ids()")
+        content = f"Get VipIds"
+        return await self._send(content)
+
+    async def get_num_vip_slots(self):
+        logger.debug(f"{id(self)} HllConnection.get_num_vip_slots()")
+        content = f"Get NumVipSlots"
+        return await self._send(content)
+
+    async def get_max_queue_size(self):
+        logger.debug(f"{id(self)} HllConnection.get_max_queue_size()")
+        content = f"Get MaxQueuedPlayers"
+        return await self._send(content)
+
+
+class AsyncRcon:
+    """"""
+
+    def __init__(
+        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 2
+    ) -> None:
+        self.ip_addr = ip_addr
+        self.port = int(port)
+        self.password = password
+
+        if connection_pool_size < 1:
+            raise ValueError(f"connection_pool_size must be a positive integer")
+
+        self.connection_pool_size = connection_pool_size
+        self.connection_limit = trio.CapacityLimiter(connection_pool_size)
+
+    async def setup(self):
+        connections: list[HllConnection] = []
+        for _ in range(self.connection_pool_size):
+            logger.debug(f"Opening connection {_+1}/{self.connection_pool_size}")
+            connection = await HllConnection.setup(
+                self.ip_addr, self.port, self.password
+            )
+            logger.debug(f"Connection {_+1}/{self.connection_pool_size} opened")
+            connections.append(connection)
+
+        self._connections = connections
+
+        # self._connections: list[HllConnection] = [
+        #     await HllConnection.setup(self.ip_addr, self.port, self.password)
+        #     for _ in range(self.connection_pool_size)
+        # ]
+
+    @asynccontextmanager
+    async def _get_connection(self) -> AsyncGenerator[HllConnection, None]:
+        async with self.connection_limit:
+            # in theory we never need to check for a connection being unavailable
+            # because trio.CapacityLimiter should handle this for us and block if
+            # it needs to wait for another connection
+            connection = self._connections.pop()
+            yield connection
+            self._connections.append(connection)
+
+    async def login(self):
+        async with self._get_connection() as conn:
+            result = await conn.login()
+            logger.debug(f"{id(self)} login {result=}")
 
     async def get_name(self):
         raise NotImplementedError
@@ -91,14 +162,18 @@ class AsyncRcon:
     async def get_gamestate(self):
         raise NotImplementedError
 
-    async def get_max_queued_players(self):
-        raise NotImplementedError
+    async def get_max_queue_size(self):
+        async with self._get_connection() as conn:
+            result = await conn.get_max_queue_size()
+            logger.debug(f"{id(conn)} get_max_queue_size {result=}")
 
-    async def set_max_queued_players(self, size: int):
+    async def set_max_queue_size(self, size: int):
         raise NotImplementedError
 
     async def get_num_vip_slots(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_num_vip_slots()
+            logger.debug(f"{id(conn)} get_num_vip_slots {result=}")
 
     async def set_num_vip_slots(self, amount: int):
         raise NotImplementedError
@@ -148,7 +223,9 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def get_vip_ids(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_vip_ids()
+            logger.debug(f"{id(conn)} get_vip_ids {result=}")
 
     async def get_player_info(self, player_name: str):
         raise NotImplementedError
@@ -159,10 +236,10 @@ class AsyncRcon:
     async def remove_admin(self, steam_id_64: str):
         raise NotImplementedError
 
-    async def dadd_vip(self, steam_id_64: str, name: str | None):
+    async def add_vip(self, steam_id_64: str, name: str | None):
         raise NotImplementedError
 
-    async def dremove_vip(self, steam_id_64: str):
+    async def remove_vip(self, steam_id_64: str):
         raise NotImplementedError
 
     async def get_temp_bans(self):
@@ -275,6 +352,45 @@ class AsyncRcon:
         raise NotImplementedError
 
 
+class Tracer(trio.abc.Instrument):
+    def before_run(self):
+        print("!!! run started")
+
+    def _print_with_task(self, msg, task):
+        # repr(task) is perhaps more useful than task.name in general,
+        # but in context of a tutorial the extra noise is unhelpful.
+        print(f"{msg}: {task.name}")
+
+    def task_spawned(self, task):
+        self._print_with_task("### new task spawned", task)
+
+    def task_scheduled(self, task):
+        self._print_with_task("### task scheduled", task)
+
+    def before_task_step(self, task):
+        self._print_with_task(">>> about to run one step of task", task)
+
+    def after_task_step(self, task):
+        self._print_with_task("<<< task step finished", task)
+
+    def task_exited(self, task):
+        self._print_with_task("### task exited", task)
+
+    def before_io_wait(self, timeout):
+        if timeout:
+            print(f"### waiting for I/O for up to {timeout} seconds")
+        else:
+            print("### doing a quick check for I/O")
+        self._sleep_time = trio.current_time()
+
+    def after_io_wait(self, timeout):
+        duration = trio.current_time() - self._sleep_time
+        print(f"### finished I/O check (took {duration} seconds)")
+
+    def after_run(self):
+        print("!!! run finished")
+
+
 async def main():
     host, port, password = (
         os.getenv("RCON_HOST"),
@@ -283,8 +399,15 @@ async def main():
     )
     rcon = AsyncRcon(host, port, password)
     await rcon.setup()
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(rcon.get_num_vip_slots)
+        nursery.start_soon(rcon.get_max_queue_size)
+    # await rcon.get_num_vip_slots()
+    # await rcon.get_max_queue_size()
+
     # await rcon.connect()
 
 
 if __name__ == "__main__":
+    # trio.run(main, instruments=[Tracer()])
     trio.run(main)
