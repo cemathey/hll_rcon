@@ -10,6 +10,8 @@ TCP_TIMEOUT = 10
 
 
 class HllConnection:
+    """Represents an underlying low level socket connection to the game server and returns raw results"""
+
     def __init__(self, ip_addr: str, port: int, password: str) -> None:
         self.ip_addr = ip_addr
         self.port = int(port)
@@ -106,15 +108,15 @@ class HllConnection:
 
 
 class AsyncRcon:
-    """"""
+    """Represents a high level RCON connection to the game server and returns processed results"""
 
     def __init__(
         self, ip_addr: str, port: str, password: str, connection_pool_size: int = 2
     ) -> None:
-        self.ip_addr = ip_addr
-        self.port = int(port)
-        self.password = password
-
+        self._ip_addr = ip_addr
+        self._port = int(port)
+        self._password = password
+        self.connections: list[HllConnection] = []
         if connection_pool_size < 1:
             raise ValueError(f"connection_pool_size must be a positive integer")
 
@@ -122,21 +124,19 @@ class AsyncRcon:
         self.connection_limit = trio.CapacityLimiter(connection_pool_size)
 
     async def setup(self):
-        connections: list[HllConnection] = []
-        for _ in range(self.connection_pool_size):
-            logger.debug(f"Opening connection {_+1}/{self.connection_pool_size}")
+        """Create `connection_pool_size` HllConnection instances"""
+
+        async def _inner_setup():
             connection = await HllConnection.setup(
-                self.ip_addr, self.port, self.password
+                self._ip_addr, self._port, self._password
             )
             logger.debug(f"Connection {_+1}/{self.connection_pool_size} opened")
-            connections.append(connection)
+            self.connections.append(connection)
 
-        self._connections = connections
-
-        # self._connections: list[HllConnection] = [
-        #     await HllConnection.setup(self.ip_addr, self.port, self.password)
-        #     for _ in range(self.connection_pool_size)
-        # ]
+        async with trio.open_nursery() as nursery:
+            for _ in range(self.connection_pool_size):
+                logger.debug(f"Opening connection {_+1}/{self.connection_pool_size}")
+                nursery.start_soon(_inner_setup)
 
     @asynccontextmanager
     async def _get_connection(self) -> AsyncGenerator[HllConnection, None]:
@@ -144,9 +144,9 @@ class AsyncRcon:
             # in theory we never need to check for a connection being unavailable
             # because trio.CapacityLimiter should handle this for us and block if
             # it needs to wait for another connection
-            connection = self._connections.pop()
+            connection = self.connections.pop()
             yield connection
-            self._connections.append(connection)
+            self.connections.append(connection)
 
     async def login(self):
         async with self._get_connection() as conn:
