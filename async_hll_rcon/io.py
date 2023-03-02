@@ -1,8 +1,10 @@
+import inspect
 import os
 from contextlib import asynccontextmanager
 from itertools import cycle
 from typing import AsyncGenerator, Iterable, Self
 
+import pydantic
 import trio
 from loguru import logger
 
@@ -95,21 +97,37 @@ class HllConnection:
             return HllConnection._xor_decode(result, self.xor_key)
 
     async def login(self):
-        logger.debug(f"{id(self)} HllConnection.login()")
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
         content = f"Login {self.password}"
         return await self._send(content)
 
     async def get_server_name(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Name"
+        return await self._send(content)
 
     async def get_current_max_player_slots(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Slots"
+        return await self._send(content)
 
     async def get_gamestate(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get GameState"
+        return await self._send(content)
 
     async def get_max_queue_size(self):
-        logger.debug(f"{id(self)} HllConnection.get_max_queue_size()")
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
         content = f"Get MaxQueuedPlayers"
         return await self._send(content)
 
@@ -117,12 +135,18 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_num_vip_slots(self):
-        logger.debug(f"{id(self)} HllConnection.get_num_vip_slots()")
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
         content = f"Get NumVipSlots"
         return await self._send(content)
 
     async def set_num_vip_slots(self, amount: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({amount=})"  # type: ignore
+        )
+        content = f"SetNumVipSlots {amount}"
+        return await self._send(content)
 
     async def set_welcome_message(self, message: str):
         raise NotImplementedError
@@ -137,13 +161,25 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_current_map(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Map"
+        return await self._send(content)
 
     async def get_available_maps(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get MapsForRotation"
+        return await self._send(content)
 
     async def get_map_rotation(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"RotList"
+        return await self._send(content)
 
     async def add_map_to_rotation(
         self,
@@ -160,19 +196,37 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_players(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Players"
+        return await self._send(content)
 
     async def get_player_steam_ids(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get PlayerIds"
+        return await self._send(content)
 
     async def get_admin_ids(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get AdminIds"
+        return await self._send(content)
 
     async def get_admin_groups(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get AdminGroups"
+        return await self._send(content)
 
     async def get_vip_ids(self):
-        logger.debug(f"{id(self)} HllConnection.get_vip_ids()")
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
         content = f"Get VipIds"
         return await self._send(content)
 
@@ -192,7 +246,11 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_temp_bans(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get TempBans"
+        return await self._send(content)
 
     async def get_permanent_bans(self):
         raise NotImplementedError
@@ -305,7 +363,7 @@ class AsyncRcon:
     """Represents a high level RCON connection to the game server and returns processed results"""
 
     def __init__(
-        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 2
+        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 4
     ) -> None:
         self._ip_addr = ip_addr
         self._port = int(port)
@@ -324,7 +382,9 @@ class AsyncRcon:
             connection = await HllConnection.setup(
                 self._ip_addr, self._port, self._password
             )
-            logger.debug(f"Connection {_+1}/{self.connection_pool_size} opened")
+            logger.debug(
+                f"Connection {_+1}/{self.connection_pool_size} {id(self)} opened"
+            )
             self.connections.append(connection)
 
         async with trio.open_nursery() as nursery:
@@ -342,24 +402,55 @@ class AsyncRcon:
             yield connection
             self.connections.append(connection)
 
+    @staticmethod
+    def to_list(raw_list: str) -> list[str]:
+        """Convert a game server tab delimited result string to a list"""
+        expected_length, *items = raw_list.split("\t")
+        expected_length = int(expected_length)
+
+        if raw_list.endswith("\t"):
+            expected_length += 1
+
+        if len(items) != expected_length:
+            logger.debug(f"{expected_length=}")
+            logger.debug(f"{len(items)=}")
+            logger.debug(f"{items=}")
+            raise ValueError("List does not match expected length")
+
+        return items
+
     async def login(self):
         async with self._get_connection() as conn:
             result = await conn.login()
             logger.debug(f"{id(self)} login {result=}")
 
     async def get_server_name(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_server_name()
+            logger.debug(
+                f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_current_max_player_slots(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_current_max_player_slots()
+            logger.debug(
+                f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_gamestate(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_gamestate()
+            logger.debug(
+                f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_max_queue_size(self):
         async with self._get_connection() as conn:
             result = await conn.get_max_queue_size()
-            logger.debug(f"{id(conn)} get_max_queue_size {result=}")
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def set_max_queue_size(self, size: int):
         raise NotImplementedError
@@ -367,10 +458,25 @@ class AsyncRcon:
     async def get_num_vip_slots(self):
         async with self._get_connection() as conn:
             result = await conn.get_num_vip_slots()
-            logger.debug(f"{id(conn)} get_num_vip_slots {result=}")
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def set_num_vip_slots(self, amount: int):
-        raise NotImplementedError
+        class Amount(pydantic.BaseModel):
+            amount: pydantic.conint(ge=1)  # type: ignore
+
+        try:
+            args = Amount(amount=amount)
+        except ValueError as e:
+            logger.error(f"{amount=} must be a positive integer")
+            raise e
+
+        async with self._get_connection() as conn:
+            result = await conn.set_num_vip_slots(args.amount)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def set_welcome_message(self, message: str):
         raise NotImplementedError
@@ -385,13 +491,25 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def get_current_map(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_current_map()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_available_maps(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_available_maps()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_map_rotation(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_map_rotation()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def add_map_to_rotation(
         self,
@@ -408,21 +526,39 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def get_players(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_players()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_player_steam_ids(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_player_steam_ids()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_admin_ids(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_admin_ids()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_admin_groups(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_admin_groups()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_vip_ids(self):
         async with self._get_connection() as conn:
             result = await conn.get_vip_ids()
-            logger.debug(f"{id(conn)} get_vip_ids {result=}")
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def get_player_info(self, player_name: str):
         raise NotImplementedError
@@ -440,7 +576,12 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def get_temp_bans(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_temp_bans()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+            return AsyncRcon.to_list(result)
 
     async def get_permanent_bans(self):
         raise NotImplementedError
@@ -594,12 +735,40 @@ async def main():
         os.getenv("RCON_PORT"),
         os.getenv("RCON_PASSWORD"),
     )
+
+    if not host or not port or not password:
+        logger.error(f"RCON_HOST, RCON_PORT or RCON_PASSWORD not set")
+        return
+
     rcon = AsyncRcon(host, port, password)
     await rcon.setup()
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(rcon.get_num_vip_slots)
-        nursery.start_soon(rcon.get_max_queue_size)
+        pass
+        # nursery.start_soon(rcon.get_num_vip_slots)
+        # nursery.start_soon(rcon.get_max_queue_size)
+        # nursery.start_soon(rcon.get_server_name)
+        # nursery.start_soon(rcon.get_current_max_player_slots)
+        # nursery.start_soon(rcon.get_gamestate)
+        # nursery.start_soon(rcon.get_current_map)
+        # nursery.start_soon(rcon.get_available_maps)
+        # nursery.start_soon(rcon.get_map_rotation)
+        # nursery.start_soon(rcon.get_players)
+        # nursery.start_soon(rcon.get_player_steam_ids)
+        # nursery.start_soon(rcon.get_admin_ids)
+        # nursery.start_soon(rcon.get_admin_groups)
+        # nursery.start_soon(rcon.get_temp_bans)
+
+    logger.debug(f"===========================")
+    bans = await rcon.get_temp_bans()
+    for b in bans:
+        if b:
+            print(b)
+
+    logger.debug(f"===========================")
     # await rcon.get_num_vip_slots()
+    # await rcon.set_num_vip_slots()
+    # await rcon.get_num_vip_slots()
+
     # await rcon.get_max_queue_size()
 
     # await rcon.connect()

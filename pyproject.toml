@@ -11,6 +11,7 @@ python = "^3.11"
 brotli = "^1.0.9"
 trio = "^0.22.0"
 loguru = "^0.6.0"
+pydantic = "^1.10.5"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -23,3 +24,9 @@ pytest = "^7.2.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+include = '\.pyi?$'
