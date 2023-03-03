@@ -8,7 +8,7 @@ import pydantic
 import trio
 from loguru import logger
 
-TCP_TIMEOUT = 10
+TCP_TIMEOUT = 1
 
 
 class HllConnection:
@@ -91,10 +91,30 @@ class HllConnection:
         """XOR the content and sendd to the game server, returning the game server response"""
         logger.debug(f"{id(self)} Sending {content=} to the game server")
         xored_content = HllConnection._xor_encode(content, self.xor_key)
-        with trio.move_on_after(TCP_TIMEOUT):
+
+        results: list[bytes] = []
+
+        with trio.move_on_after(TCP_TIMEOUT) as cancel_scope:
+            logger.debug(f"sending content")
             await self.connection.send_all(xored_content)
-            result = await self.connection.receive_some()
-            return HllConnection._xor_decode(result, self.xor_key)
+            logger.debug(f"content sent after")
+
+        logger.debug(f"send: {cancel_scope.cancelled_caught=}")
+
+        with trio.move_on_after(TCP_TIMEOUT) as cancel_scope:
+            async for buffer in self.connection:
+                logger.debug(f"{len(buffer)=}")
+                results.append(buffer)
+                logger.debug(f"{len(results)=}")
+
+            logger.debug(f"receive: {cancel_scope.cancelled_caught=}")
+
+            if cancel_scope.cancelled_caught:
+                raise ValueError(f"timed out while receiving response")
+
+        combined_results = b"".join(results)
+        logger.debug(f"{HllConnection._xor_decode(combined_results, self.xor_key)}")
+        return HllConnection._xor_decode(combined_results, self.xor_key)
 
     async def login(self):
         logger.debug(
@@ -253,7 +273,11 @@ class HllConnection:
         return await self._send(content)
 
     async def get_permanent_bans(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get PermaBans"
+        return await self._send(content)
 
     async def message_player(
         self, steam_id_64: str | None, player_name: str | None, message: str
@@ -363,7 +387,7 @@ class AsyncRcon:
     """Represents a high level RCON connection to the game server and returns processed results"""
 
     def __init__(
-        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 4
+        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
     ) -> None:
         self._ip_addr = ip_addr
         self._port = int(port)
@@ -584,7 +608,12 @@ class AsyncRcon:
             return AsyncRcon.to_list(result)
 
     async def get_permanent_bans(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_permanent_bans()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+            return AsyncRcon.to_list(result)
 
     async def message_player(
         self, steam_id_64: str | None, player_name: str | None, message: str
@@ -759,7 +788,7 @@ async def main():
         # nursery.start_soon(rcon.get_temp_bans)
 
     logger.debug(f"===========================")
-    bans = await rcon.get_temp_bans()
+    bans = await rcon.get_permanent_bans()
     for b in bans:
         if b:
             print(b)
