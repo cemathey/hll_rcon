@@ -1,12 +1,17 @@
 import inspect
 import os
+import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from itertools import cycle
 from typing import AsyncGenerator, Iterable, Self
 
 import pydantic
 import trio
+from dateutil import parser
 from loguru import logger
+
+from async_hll_rcon.typedefs import BanType
 
 TCP_TIMEOUT = 1
 
@@ -386,6 +391,10 @@ class HllConnection:
 class AsyncRcon:
     """Represents a high level RCON connection to the game server and returns processed results"""
 
+    _ban_log_pattern = re.compile(
+        r"(\d{17}) : nickname \"(.*)\" banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\""
+    )
+
     def __init__(
         self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
     ) -> None:
@@ -599,13 +608,54 @@ class AsyncRcon:
     async def remove_vip(self, steam_id_64: str):
         raise NotImplementedError
 
-    async def get_temp_bans(self):
+    @staticmethod
+    def parse_ban_log_timestamp(raw_timestamp: str) -> datetime:
+        _date, _time = raw_timestamp.split("-")
+        _time = _time.replace(".", ":")
+
+        return parser.parse(f"{_date} {_time}")
+
+    @staticmethod
+    def parse_ban_log(raw_ban: str) -> BanType:
+        """Parse a raw HLL ban log into a BanType dataclass
+
+        76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
+        """
+        if match := re.match(AsyncRcon._ban_log_pattern, raw_ban):
+            (
+                steam_id_64,
+                player_name,
+                duration_hours,
+                raw_timestamp,
+                reason,
+                admin,
+            ) = match.groups()
+
+            timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
+
+            ban = BanType(
+                steam_id_64=steam_id_64,
+                player_name=player_name,
+                duration_hours=int(duration_hours),
+                timestamp=timestamp,
+                reason=reason,
+                admin=admin,
+            )
+        else:
+            raise ValueError(f"Received invalid ban log: {raw_ban}")
+
+        return ban
+
+    async def get_temp_bans(self) -> list[BanType]:
         async with self._get_connection() as conn:
             result = await conn.get_temp_bans()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            return AsyncRcon.to_list(result)
+
+            raw_results = AsyncRcon.to_list(result)
+
+            return [AsyncRcon.parse_ban_log(raw_ban) for raw_ban in raw_results]
 
     async def get_permanent_bans(self):
         async with self._get_connection() as conn:
