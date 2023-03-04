@@ -164,7 +164,11 @@ class HllConnection:
         return await self._send(content)
 
     async def set_max_queue_size(self, size: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetMaxQueuedPlayers {size}"
+        return await self._send(content)
 
     async def get_num_vip_slots(self):
         logger.debug(
@@ -375,10 +379,18 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_team_switch_cooldown(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get TeamSwitchCooldown"
+        return await self._send(content)
 
     async def set_team_switch_cooldown(self, cooldown: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetTeamSwitchCooldown {cooldown}"
+        return await self._send(content)
 
     async def get_auto_balance_enabled(self):
         raise NotImplementedError
@@ -426,11 +438,11 @@ class HllConnection:
 class AsyncRcon:
     """Represents a high level RCON connection to the game server and returns processed results"""
 
-    temp_ban_log_pattern = re.compile(
+    _temp_ban_log_pattern = re.compile(
         r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\""
     )
 
-    perma_ban_log_pattern = re.compile(
+    _perma_ban_log_pattern = re.compile(
         r"(\d{17}) :(?: nickname \"(.*)\")? banned on (.*) for \"(.*)\" by admin \"(.*)\""
     )
 
@@ -441,6 +453,8 @@ class AsyncRcon:
         self._port = int(port)
         self._password = password
         self.connections: list[HllConnection] = []
+
+        # TODO: Pydantic validation
         if connection_pool_size < 1:
             raise ValueError(f"connection_pool_size must be a positive integer")
 
@@ -481,9 +495,6 @@ class AsyncRcon:
 
         expected_length, *items = raw_list.split("\t")
         expected_length = int(expected_length)
-
-        # if raw_list.endswith("\t"):
-        #     expected_length += 1
 
         if len(items) != expected_length:
             logger.debug(f"{expected_length=}")
@@ -526,8 +537,17 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def set_max_queue_size(self, size: int):
-        raise NotImplementedError
+    async def set_max_queue_size(self, size: int) -> bool:
+        async with self._get_connection() as conn:
+            result = await conn.set_max_queue_size(size=size)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_num_vip_slots(self):
         async with self._get_connection() as conn:
@@ -741,7 +761,7 @@ class AsyncRcon:
         76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
         """
         # TODO: Account for any other optional fields
-        if match := re.match(AsyncRcon.temp_ban_log_pattern, raw_ban):
+        if match := re.match(AsyncRcon._temp_ban_log_pattern, raw_ban):
             (
                 steam_id_64,
                 player_name,
@@ -773,7 +793,7 @@ class AsyncRcon:
         76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"
         """
         # TODO: Account for any other optional fields
-        if match := re.match(AsyncRcon.perma_ban_log_pattern, raw_ban):
+        if match := re.match(AsyncRcon._perma_ban_log_pattern, raw_ban):
             (
                 steam_id_64,
                 player_name,
@@ -879,11 +899,45 @@ class AsyncRcon:
     async def set_high_ping_limit(self, threshold: int):
         raise NotImplementedError
 
-    async def get_team_switch_cooldown(self):
-        raise NotImplementedError
+    async def get_team_switch_cooldown(self) -> int:
+        async with self._get_connection() as conn:
+            result = await conn.get_team_switch_cooldown()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            class TeamSwitchCoolDown(pydantic.BaseModel):
+                cooldown: pydantic.conint(ge=0)  # type: ignore
+
+        try:
+            validated_result = TeamSwitchCoolDown(cooldown=result)
+        except ValueError as e:
+            raise ValueError(
+                f"Received an invalid response=`{result}` from the game server"
+            )
+
+        return validated_result.cooldown
 
     async def set_team_switch_cooldown(self, cooldown: int):
-        raise NotImplementedError
+        class CoolDown(pydantic.BaseModel):
+            cooldown: pydantic.conint(ge=1)  # type: ignore
+
+        try:
+            args = CoolDown(cooldown=cooldown)
+        except ValueError as e:
+            logger.error(f"{cooldown=} must be a positive integer")
+            raise e
+
+        async with self._get_connection() as conn:
+            result = await conn.set_team_switch_cooldown(args.cooldown)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_auto_balance_enabled(self):
         raise NotImplementedError
@@ -1003,10 +1057,16 @@ async def main():
     #         print(b)
 
     logger.debug(f"===========================")
-    logger.debug(await rcon.get_admin_groups())
-    logger.debug(await rcon.remove_vip("76561198004895814"))
-    logger.debug(await rcon.add_vip("76561198004895814", "NoodleArms"))
+    # logger.debug(await rcon.get_admin_groups())
+    # logger.debug(await rcon.remove_vip("76561198004895814"))
+    # logger.debug(await rcon.add_vip("76561198004895814", "NoodleArms"))
+    logger.debug(await rcon.get_team_switch_cooldown())
+    logger.debug(await rcon.set_team_switch_cooldown(8))
+    logger.debug(await rcon.get_team_switch_cooldown())
+    logger.debug(await rcon.set_team_switch_cooldown(5))
+    logger.debug(await rcon.get_team_switch_cooldown())
     # await rcon.get_num_vip_slots()
+
     # await rcon.set_num_vip_slots()
     # await rcon.get_num_vip_slots()
 
