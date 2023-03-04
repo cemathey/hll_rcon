@@ -15,6 +15,7 @@ from async_hll_rcon.typedefs import (
     FAIL,
     FAIL_MAP_REMOVAL,
     SUCCESS,
+    VALID_ADMIN_ROLES,
     PermanentBanType,
     TempBanType,
 )
@@ -266,6 +267,20 @@ class HllConnection:
         content = f"Get AdminGroups"
         return await self._send(content)
 
+    async def add_admin(self, steam_id_64: str, role: str, name: str | None = None):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"AdminAdd {steam_id_64} {role} {name or ''}"
+        return await self._send(content)
+
+    async def remove_admin(self, steam_id_64: str):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"AdminDel {steam_id_64}"
+        return await self._send(content)
+
     async def get_vip_ids(self):
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
@@ -276,17 +291,19 @@ class HllConnection:
     async def get_player_info(self, player_name: str):
         raise NotImplementedError
 
-    async def add_admin(self, steam_id_64: str, role: str, name: str | None):
-        raise NotImplementedError
-
-    async def remove_admin(self, steam_id_64: str):
-        raise NotImplementedError
-
     async def add_vip(self, steam_id_64: str, name: str | None):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"VipAdd {steam_id_64} {name}"
+        return await self._send(content)
 
     async def remove_vip(self, steam_id_64: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"VipDel {steam_id_64}"
+        return await self._send(content)
 
     async def get_temp_bans(self):
         logger.debug(
@@ -460,11 +477,13 @@ class AsyncRcon:
     @staticmethod
     def to_list(raw_list: str) -> list[str]:
         """Convert a game server tab delimited result string to a list"""
+        raw_list = raw_list.strip()
+
         expected_length, *items = raw_list.split("\t")
         expected_length = int(expected_length)
 
-        if raw_list.endswith("\t"):
-            expected_length += 1
+        # if raw_list.endswith("\t"):
+        #     expected_length += 1
 
         if len(items) != expected_length:
             logger.debug(f"{expected_length=}")
@@ -633,12 +652,45 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_admin_groups(self):
+    async def get_admin_groups(self) -> list[str]:
         async with self._get_connection() as conn:
             result = await conn.get_admin_groups()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
+
+            groups = AsyncRcon.to_list(result)
+
+            if not all(group in VALID_ADMIN_ROLES for group in groups):
+                raise ValueError(f"Received an invalid response from the game server")
+
+            return groups
+
+    async def add_admin(
+        self, steam_id_64: str, role: str, name: str | None = None
+    ) -> bool:
+        async with self._get_connection() as conn:
+            result = await conn.add_admin(steam_id_64=steam_id_64, role=role, name=name)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
+
+    async def remove_admin(self, steam_id_64: str):
+        async with self._get_connection() as conn:
+            result = await conn.remove_admin(steam_id_64=steam_id_64)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def get_vip_ids(self):
         async with self._get_connection() as conn:
@@ -646,21 +698,34 @@ class AsyncRcon:
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
+            return AsyncRcon.to_list(result)
 
     async def get_player_info(self, player_name: str):
         raise NotImplementedError
 
-    async def add_admin(self, steam_id_64: str, role: str, name: str | None):
-        raise NotImplementedError
-
-    async def remove_admin(self, steam_id_64: str):
-        raise NotImplementedError
-
     async def add_vip(self, steam_id_64: str, name: str | None):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.add_vip(steam_id_64=steam_id_64, name=name)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def remove_vip(self, steam_id_64: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.remove_vip(steam_id_64=steam_id_64)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     @staticmethod
     def parse_ban_log_timestamp(raw_timestamp: str) -> datetime:
@@ -938,7 +1003,9 @@ async def main():
     #         print(b)
 
     logger.debug(f"===========================")
-    logger.debug(await rcon.add_map_to_rotation("kharkov_warfare"))
+    logger.debug(await rcon.get_admin_groups())
+    logger.debug(await rcon.remove_vip("76561198004895814"))
+    logger.debug(await rcon.add_vip("76561198004895814", "NoodleArms"))
     # await rcon.get_num_vip_slots()
     # await rcon.set_num_vip_slots()
     # await rcon.get_num_vip_slots()

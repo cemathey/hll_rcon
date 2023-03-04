@@ -5,6 +5,8 @@ SUCCESS = "SUCCESS"
 FAIL = "FAIL"
 FAIL_MAP_REMOVAL = "Requested map name was not found"
 
+VALID_ADMIN_ROLES = ("owner", "senior", "junior", "spectator")
+
 
 @dataclass()
 class TempBanType:
