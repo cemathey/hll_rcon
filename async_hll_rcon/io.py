@@ -11,7 +11,13 @@ import trio
 from dateutil import parser
 from loguru import logger
 
-from async_hll_rcon.typedefs import FAIL, SUCCESS, PermanentBanType, TempBanType
+from async_hll_rcon.typedefs import (
+    FAIL,
+    FAIL_MAP_REMOVAL,
+    SUCCESS,
+    PermanentBanType,
+    TempBanType,
+)
 
 TCP_TIMEOUT = 1
 
@@ -215,13 +221,17 @@ class HllConnection:
         raise NotImplementedError
 
     async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"RotDel {name} {ordinal or ''}"
+        return await self._send(content)
 
     async def set_current_map(self, name: str, ordinal: int | None = 1):
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"Map {name} {ordinal}"
+        content = f"Map {name} {ordinal or ''}"
         return await self._send(content)
 
     async def get_players(self):
@@ -561,7 +571,16 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.remove_map_from_rotation(name=name, ordinal=ordinal)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL_MAP_REMOVAL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def set_current_map(self, name: str, ordinal: int | None = 1) -> bool:
         async with self._get_connection() as conn:
@@ -901,7 +920,7 @@ async def main():
     #         print(b)
 
     logger.debug(f"===========================")
-    logger.debug(await rcon.set_current_map("kharkov_warfare"))
+    logger.debug(await rcon.remove_map_from_rotation("kharkov_warfare"))
     # await rcon.get_num_vip_slots()
     # await rcon.set_num_vip_slots()
     # await rcon.get_num_vip_slots()

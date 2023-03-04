@@ -3,6 +3,7 @@ from datetime import datetime
 
 SUCCESS = "SUCCESS"
 FAIL = "FAIL"
+FAIL_MAP_REMOVAL = "Requested map name was not found"
 
 
 @dataclass()
