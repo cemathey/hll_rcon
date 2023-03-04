@@ -215,10 +215,14 @@ class HllConnection:
     async def add_map_to_rotation(
         self,
         name: str,
-        after_map_name: str | None,
-        after_map_ordinal: int | None = 1,
+        after_map_name: str | None = None,
+        after_map_ordinal: int | None = None,
     ):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"RotAdd {name} {after_map_name or ''} {after_map_ordinal or ''}"
+        return await self._send(content)
 
     async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
         logger.debug(
@@ -565,10 +569,24 @@ class AsyncRcon:
     async def add_map_to_rotation(
         self,
         name: str,
-        after_map_name: str | None,
-        after_map_ordinal: int | None = 1,
+        after_map_name: str | None = None,
+        after_map_ordinal: int | None = None,
     ):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.add_map_to_rotation(
+                name=name,
+                after_map_name=after_map_name,
+                after_map_ordinal=after_map_ordinal,
+            )
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        # TODO: Flesh out the actual error messages it returns
+        if result not in (SUCCESS, FAIL_MAP_REMOVAL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
         async with self._get_connection() as conn:
@@ -920,7 +938,7 @@ async def main():
     #         print(b)
 
     logger.debug(f"===========================")
-    logger.debug(await rcon.remove_map_from_rotation("kharkov_warfare"))
+    logger.debug(await rcon.add_map_to_rotation("kharkov_warfare"))
     # await rcon.get_num_vip_slots()
     # await rcon.set_num_vip_slots()
     # await rcon.get_num_vip_slots()
