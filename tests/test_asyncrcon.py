@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 
 from async_hll_rcon.io import AsyncRcon, HllConnection
-from async_hll_rcon.typedefs import BanType
+from async_hll_rcon.typedefs import PermanentBanType, TempBanType
 
 
 @pytest.mark.parametrize("message, xor_key, expected", [("asdf", b"XOR", b"9<6>")])
@@ -54,7 +54,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
     [
         (
             '76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            BanType(
+            TempBanType(
                 steam_id_64="76561199023367826",
                 player_name="(WTH) Abu",
                 duration_hours=2,
@@ -64,8 +64,54 @@ def test_ban_list_timestamp_conversion(raw, expected):
                 reason="Being a troll",
                 admin="Some Admin Name",
             ),
-        )
+        ),
+        (
+            '76561199023367826 : banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
+            TempBanType(
+                steam_id_64="76561199023367826",
+                player_name=None,
+                duration_hours=2,
+                timestamp=datetime(
+                    year=2021, month=12, day=9, hour=16, minute=40, second=8
+                ),
+                reason="Being a troll",
+                admin="Some Admin Name",
+            ),
+        ),
     ],
 )
-def test_ban_parsing(raw, expected):
-    assert AsyncRcon.parse_ban_log(raw) == expected
+def test_temp_ban_parsing(raw, expected):
+    assert AsyncRcon.parse_temp_ban_log(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            '76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
+            PermanentBanType(
+                steam_id_64="76561197975123456",
+                player_name="Georgij Zhukov Sovie",
+                timestamp=datetime(
+                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                ),
+                reason="Racism",
+                admin="BLACKLIST: NoodleArms",
+            ),
+        ),
+        (
+            '76561197975123456 : banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
+            PermanentBanType(
+                steam_id_64="76561197975123456",
+                player_name=None,
+                timestamp=datetime(
+                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                ),
+                reason="Racism",
+                admin="BLACKLIST: NoodleArms",
+            ),
+        ),
+    ],
+)
+def test_perma_ban_parsing(raw, expected):
+    assert AsyncRcon.parse_perma_ban_log(raw) == expected
