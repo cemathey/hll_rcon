@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+SUCCESS = "SUCCESS"
+FAIL = "FAIL"
+
 
 @dataclass()
 class TempBanType:

@@ -11,7 +11,7 @@ import trio
 from dateutil import parser
 from loguru import logger
 
-from async_hll_rcon.typedefs import PermanentBanType, TempBanType
+from async_hll_rcon.typedefs import FAIL, SUCCESS, PermanentBanType, TempBanType
 
 TCP_TIMEOUT = 1
 
@@ -218,7 +218,11 @@ class HllConnection:
         raise NotImplementedError
 
     async def set_current_map(self, name: str, ordinal: int | None = 1):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Map {name} {ordinal}"
+        return await self._send(content)
 
     async def get_players(self):
         logger.debug(
@@ -559,8 +563,17 @@ class AsyncRcon:
     async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
         raise NotImplementedError
 
-    async def set_current_map(self, name: str, ordinal: int | None = 1):
-        raise NotImplementedError
+    async def set_current_map(self, name: str, ordinal: int | None = 1) -> bool:
+        async with self._get_connection() as conn:
+            result = await conn.set_current_map(name=name, ordinal=ordinal)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_players(self):
         async with self._get_connection() as conn:
@@ -881,13 +894,14 @@ async def main():
         # nursery.start_soon(rcon.get_admin_groups)
         # nursery.start_soon(rcon.get_temp_bans)
 
-    logger.debug(f"===========================")
-    bans = await rcon.get_permanent_bans()
-    for b in bans:
-        if b:
-            print(b)
+    # logger.debug(f"===========================")
+    # bans = await rcon.get_permanent_bans()
+    # for b in bans:
+    #     if b:
+    #         print(b)
 
     logger.debug(f"===========================")
+    logger.debug(await rcon.set_current_map("kharkov_warfare"))
     # await rcon.get_num_vip_slots()
     # await rcon.set_num_vip_slots()
     # await rcon.get_num_vip_slots()
