@@ -6,7 +6,6 @@ from datetime import datetime
 from itertools import cycle
 from typing import AsyncGenerator, Iterable, Self
 
-import pydantic
 import trio
 from dateutil import parser
 from loguru import logger
@@ -14,9 +13,16 @@ from loguru import logger
 from async_hll_rcon.typedefs import (
     FAIL,
     FAIL_MAP_REMOVAL,
+    HLL_BOOL_DISABLED,
+    HLL_BOOL_ENABLED,
     SUCCESS,
     VALID_ADMIN_ROLES,
+    Amount,
+    AutoBalanceEnabled,
+    AutoBalanceThreshold,
+    HighPingLimit,
     PermanentBanType,
+    TeamSwitchCoolDown,
     TempBanType,
 )
 
@@ -188,10 +194,19 @@ class HllConnection:
         raise NotImplementedError
 
     async def set_broadcast_message(self, message: str | None):
-        raise NotImplementedError
+        # TODO: Failing with a blank message?
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({message=})"  # type: ignore
+        )
+        if message:
+            content = f"Broadcast {message}"
+        else:
+            content = f"Broadcast "
+
+        return await self._send(content)
 
     async def reset_broadcast_message(self):
-        raise NotImplementedError
+        return await self.set_broadcast_message(None)
 
     async def get_game_logs(self, minutes: int, filter: str):
         raise NotImplementedError
@@ -373,10 +388,24 @@ class HllConnection:
         raise NotImplementedError
 
     async def get_high_ping_limit(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get HighPing"
+        return await self._send(content)
 
     async def set_high_ping_limit(self, threshold: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetHighPing {threshold}"
+        return await self._send(content)
+
+    async def disable_high_ping_limit(self):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        return await self.set_high_ping_limit(0)
 
     async def get_team_switch_cooldown(self):
         logger.debug(
@@ -393,19 +422,39 @@ class HllConnection:
         return await self._send(content)
 
     async def get_auto_balance_enabled(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"AutoBalanceEnabled"
+        return await self._send(content)
 
     async def enable_auto_balance(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetAutobalanceEnabled {HLL_BOOL_ENABLED}"
+        return await self._send(content)
 
     async def disable_auto_balance(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetAutobalanceEnabled {HLL_BOOL_DISABLED}"
+        return await self._send(content)
 
     async def get_auto_balance_threshold(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get AutoBalanceThreshold"
+        return await self._send(content)
 
     async def set_auto_balance_threshold(self, threshold: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetAutoBalanceThreshold {threshold}"
+        return await self._send(content)
 
     async def get_vote_kick_enabled(self):
         raise NotImplementedError
@@ -557,9 +606,6 @@ class AsyncRcon:
             )
 
     async def set_num_vip_slots(self, amount: int):
-        class Amount(pydantic.BaseModel):
-            amount: pydantic.conint(ge=1)  # type: ignore
-
         try:
             args = Amount(amount=amount)
         except ValueError as e:
@@ -576,10 +622,28 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def set_broadcast_message(self, message: str | None):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.set_broadcast_message(message=message)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def reset_broadcast_message(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.reset_broadcast_message()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_game_logs(self, minutes: int, filter: str):
         raise NotImplementedError
@@ -894,10 +958,50 @@ class AsyncRcon:
         raise NotImplementedError
 
     async def get_high_ping_limit(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_high_ping_limit()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        try:
+            validated_result = HighPingLimit(limit=result)
+        except ValueError as e:
+            raise ValueError(
+                f"Received an invalid response=`{result}` from the game server"
+            )
+
+        return validated_result.limit
 
     async def set_high_ping_limit(self, threshold: int):
-        raise NotImplementedError
+        try:
+            args = HighPingLimit(limit=threshold)
+        except ValueError as e:
+            logger.error(f"{threshold=} must be an integer >= 0")
+            raise e
+
+        async with self._get_connection() as conn:
+            result = await conn.set_high_ping_limit(threshold=args.limit)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
+
+    async def disable_high_ping_limit(self):
+        async with self._get_connection() as conn:
+            result = await conn.disable_high_ping_limit()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_team_switch_cooldown(self) -> int:
         async with self._get_connection() as conn:
@@ -905,9 +1009,6 @@ class AsyncRcon:
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-
-            class TeamSwitchCoolDown(pydantic.BaseModel):
-                cooldown: pydantic.conint(ge=0)  # type: ignore
 
         try:
             validated_result = TeamSwitchCoolDown(cooldown=result)
@@ -919,11 +1020,8 @@ class AsyncRcon:
         return validated_result.cooldown
 
     async def set_team_switch_cooldown(self, cooldown: int):
-        class CoolDown(pydantic.BaseModel):
-            cooldown: pydantic.conint(ge=1)  # type: ignore
-
         try:
-            args = CoolDown(cooldown=cooldown)
+            args = TeamSwitchCoolDown(cooldown=cooldown)
         except ValueError as e:
             logger.error(f"{cooldown=} must be a positive integer")
             raise e
@@ -940,19 +1038,78 @@ class AsyncRcon:
             return result == SUCCESS
 
     async def get_auto_balance_enabled(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_auto_balance_enabled()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        try:
+            validated_result = AutoBalanceEnabled(enabled=result)  # type: ignore
+        except ValueError as e:
+            raise ValueError(
+                f"Received an invalid response=`{result}` from the game server"
+            )
+
+        return validated_result.enabled
 
     async def enable_auto_balance(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.enable_auto_balance()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def disable_auto_balance(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.disable_auto_balance()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_auto_balance_threshold(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_auto_balance_threshold()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        try:
+            validated_result = AutoBalanceThreshold(threshold=result)  # type: ignore
+        except ValueError as e:
+            raise ValueError(
+                f"Received an invalid response=`{result}` from the game server"
+            )
+
+        return validated_result.threshold
 
     async def set_auto_balance_threshold(self, threshold: int):
-        raise NotImplementedError
+        try:
+            args = AutoBalanceThreshold(threshold=threshold)
+        except ValueError as e:
+            logger.error(f"{threshold=} must be a positive integer")
+            raise e
+
+        async with self._get_connection() as conn:
+            result = await conn.set_auto_balance_threshold(args.threshold)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_vote_kick_enabled(self):
         raise NotImplementedError
@@ -1060,11 +1217,18 @@ async def main():
     # logger.debug(await rcon.get_admin_groups())
     # logger.debug(await rcon.remove_vip("76561198004895814"))
     # logger.debug(await rcon.add_vip("76561198004895814", "NoodleArms"))
-    logger.debug(await rcon.get_team_switch_cooldown())
-    logger.debug(await rcon.set_team_switch_cooldown(8))
-    logger.debug(await rcon.get_team_switch_cooldown())
-    logger.debug(await rcon.set_team_switch_cooldown(5))
-    logger.debug(await rcon.get_team_switch_cooldown())
+    # logger.debug(await rcon.set_broadcast_message("Test"))
+    # logger.debug(await rcon.reset_broadcast_message())
+    # logger.debug(await rcon.get_high_ping_limit())
+    # logger.debug(await rcon.disable_high_ping_limit())
+    # logger.debug(await rcon.get_high_ping_limit())
+    # logger.debug(await rcon.set_high_ping_limit(0))
+    # logger.debug(await rcon.enable_auto_balance())
+    logger.debug(await rcon.get_auto_balance_threshold())
+    logger.debug(await rcon.set_auto_balance_threshold(5))
+    logger.debug(await rcon.get_auto_balance_threshold())
+    logger.debug(await rcon.set_auto_balance_threshold(1))
+    logger.debug(await rcon.get_auto_balance_threshold())
     # await rcon.get_num_vip_slots()
 
     # await rcon.set_num_vip_slots()
