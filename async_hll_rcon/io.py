@@ -24,6 +24,7 @@ from async_hll_rcon.typedefs import (
     PermanentBanType,
     TeamSwitchCoolDown,
     TempBanType,
+    VoteKickEnabled,
 )
 
 TCP_TIMEOUT = 1
@@ -457,13 +458,25 @@ class HllConnection:
         return await self._send(content)
 
     async def get_vote_kick_enabled(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get VoteKickEnabled"
+        return await self._send(content)
 
     async def enable_vote_kick(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetVoteKickEnabled  {HLL_BOOL_ENABLED}"
+        return await self._send(content)
 
     async def disable_vote_kick(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetVoteKickEnabled  {HLL_BOOL_DISABLED}"
+        return await self._send(content)
 
     async def get_vote_kick_threshold(self):
         raise NotImplementedError
@@ -1112,13 +1125,44 @@ class AsyncRcon:
             return result == SUCCESS
 
     async def get_vote_kick_enabled(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_vote_kick_enabled()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        try:
+            validated_result = VoteKickEnabled(enabled=result)  # type: ignore
+        except ValueError as e:
+            raise ValueError(
+                f"Received an invalid response=`{result}` from the game server"
+            )
+
+        return validated_result.enabled
 
     async def enable_vote_kick(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.enable_vote_kick()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def disable_vote_kick(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.disable_vote_kick()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_vote_kick_threshold(self):
         raise NotImplementedError
@@ -1224,11 +1268,16 @@ async def main():
     # logger.debug(await rcon.get_high_ping_limit())
     # logger.debug(await rcon.set_high_ping_limit(0))
     # logger.debug(await rcon.enable_auto_balance())
-    logger.debug(await rcon.get_auto_balance_threshold())
-    logger.debug(await rcon.set_auto_balance_threshold(5))
-    logger.debug(await rcon.get_auto_balance_threshold())
-    logger.debug(await rcon.set_auto_balance_threshold(1))
-    logger.debug(await rcon.get_auto_balance_threshold())
+    # logger.debug(await rcon.get_auto_balance_threshold())
+    # logger.debug(await rcon.set_auto_balance_threshold(5))
+    # logger.debug(await rcon.get_auto_balance_threshold())
+    # logger.debug(await rcon.set_auto_balance_threshold(1))
+    # logger.debug(await rcon.get_auto_balance_threshold())
+    logger.debug(await rcon.get_vote_kick_enabled())
+    logger.debug(await rcon.enable_vote_kick())
+    logger.debug(await rcon.get_vote_kick_enabled())
+    logger.debug(await rcon.disable_vote_kick())
+    logger.debug(await rcon.get_vote_kick_enabled())
     # await rcon.get_num_vip_slots()
 
     # await rcon.set_num_vip_slots()

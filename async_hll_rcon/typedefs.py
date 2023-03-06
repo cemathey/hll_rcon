@@ -40,6 +40,10 @@ class AutoBalanceEnabled(pydantic.BaseModel):
     enabled: bool
 
 
+class VoteKickEnabled(pydantic.BaseModel):
+    enabled: bool
+
+
 class TeamSwitchCoolDown(pydantic.BaseModel):
     cooldown: pydantic.conint(ge=0)  # type: ignore
 
