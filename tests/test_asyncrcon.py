@@ -3,7 +3,12 @@ from datetime import datetime
 import pytest
 
 from async_hll_rcon.io import AsyncRcon, HllConnection
-from async_hll_rcon.typedefs import PermanentBanType, TempBanType
+from async_hll_rcon.typedefs import (
+    PermanentBanType,
+    PlayerInfo,
+    Score,
+    TemporaryBanType,
+)
 
 
 @pytest.mark.parametrize("message, xor_key, expected", [("asdf", b"XOR", b"9<6>")])
@@ -54,7 +59,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
     [
         (
             '76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TempBanType(
+            TemporaryBanType(
                 steam_id_64="76561199023367826",
                 player_name="(WTH) Abu",
                 duration_hours=2,
@@ -67,7 +72,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
         ),
         (
             '76561199023367826 : banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TempBanType(
+            TemporaryBanType(
                 steam_id_64="76561199023367826",
                 player_name=None,
                 duration_hours=2,
@@ -115,3 +120,48 @@ def test_temp_ban_parsing(raw, expected):
 )
 def test_perma_ban_parsing(raw, expected):
     assert AsyncRcon.parse_perma_ban_log(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected", [("1,2,3,4", "1,2,3,4"), ([(0, 1), (2, 3)], "0,1,2,3")]
+)
+def test_convert_vote_kick_thresholds(raw, expected):
+    assert AsyncRcon.convert_vote_kick_thresholds(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [("1,2,3", ValueError), ((0,), ValueError), ("", ValueError), (None, ValueError)],
+)
+def test_convert_vote_kick_thresholds_exceptions(raw, expected):
+    with pytest.raises(expected):
+        AsyncRcon.convert_vote_kick_thresholds(raw)
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            """Name: NoodleArms
+steamID64: 76561198004895814
+Team: None
+Role: Rifleman
+Kills: 0 - Deaths: 0
+Score: C 0, O 0, D 0, S 0
+Level: 238
+""",
+            PlayerInfo(
+                player_name="NoodleArms",
+                steam_id_64="76561198004895814",
+                team=None,
+                role="Rifleman",
+                score=Score(
+                    kills=0, deaths=0, combat=0, offensive=0, defensive=0, support=0
+                ),
+                level=238,
+            ),
+        )
+    ],
+)
+def test_parse_player_info(raw, expected):
+    assert AsyncRcon.parse_player_info(raw) == expected

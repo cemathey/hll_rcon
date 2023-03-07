@@ -21,10 +21,15 @@ from async_hll_rcon.typedefs import (
     AutoBalanceEnabled,
     AutoBalanceThreshold,
     HighPingLimit,
+    IntegerGreaterOrEqualToOne,
+    InvalidTempBanType,
     PermanentBanType,
+    PlayerInfo,
+    Score,
     TeamSwitchCoolDown,
-    TempBanType,
+    TemporaryBanType,
     VoteKickEnabled,
+    VoteKickThreshold,
 )
 
 TCP_TIMEOUT = 1
@@ -309,7 +314,11 @@ class HllConnection:
         return await self._send(content)
 
     async def get_player_info(self, player_name: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"PlayerInfo {player_name}"
+        return await self._send(content)
 
     async def add_vip(self, steam_id_64: str, name: str | None):
         logger.debug(
@@ -344,43 +353,95 @@ class HllConnection:
     ):
         raise NotImplementedError
 
-    async def punish_player(self, player_name: str, reason: str | None):
-        raise NotImplementedError
+    async def punish_player(self, player_name: str, reason: str | None = None):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Punish {player_name} {reason}"
+        return await self._send(content)
 
     async def switch_player_on_death(self, player_name: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SwitchTeamOnDeath {player_name}"
+        return await self._send(content)
 
     async def switch_player_now(self, player_name: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SwitchTeamNow {player_name}"
+        return await self._send(content)
 
-    async def kick_player(self, player_name: str, reason: str | None):
-        raise NotImplementedError
+    async def kick_player(self, player_name: str, reason: str | None = None):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Kick {player_name} {reason}"
+        return await self._send(content)
 
     async def temp_ban_player(
         self,
-        steam_id_64: str | None,
-        player_name: str | None,
-        duration: int | None,
-        reason: str | None,
-        by_admin_name: str | None,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
+        duration: int | None = None,
+        reason: str | None = None,
+        by_admin_name: str | None = None,
     ):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+
+        if duration is None:
+            validated_duration = ""
+        else:
+            validated_duration = str(duration)
+
+        if reason is None:
+            reason = ""
+
+        if by_admin_name is None:
+            by_admin_name = ""
+
+        content = f'TempBan "{steam_id_64 or player_name}" {validated_duration} "{reason}" "{by_admin_name}"'
+        return await self._send(content)
 
     async def perma_ban_player(
         self,
-        steam_id_64: str | None,
-        player_name: str | None,
-        duration: int | None,
-        reason: str | None,
-        by_admin_name: str | None,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
+        reason: str | None = None,
+        by_admin_name: str | None = None,
     ):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+
+        if reason is None:
+            reason = ""
+
+        if by_admin_name is None:
+            by_admin_name = ""
+
+        content = (
+            f'PermaBan "{steam_id_64 or player_name}" "{reason}" "{by_admin_name}"'
+        )
+        return await self._send(content)
 
     async def remove_temp_ban(self, ban_log: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"PardonTempBan {ban_log}"
+        return await self._send(content)
 
     async def remove_perma_ban(self, ban_log: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"PardonPermaBan {ban_log}"
+        return await self._send(content)
 
     async def get_idle_kick_time(self):
         raise NotImplementedError
@@ -478,34 +539,64 @@ class HllConnection:
         content = f"SetVoteKickEnabled  {HLL_BOOL_DISABLED}"
         return await self._send(content)
 
-    async def get_vote_kick_threshold(self):
-        raise NotImplementedError
+    async def get_vote_kick_thresholds(self):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get VoteKickThreshold"
+        return await self._send(content)
 
-    async def set_vote_kick_threshold(self, thresholds: Iterable[tuple[int, int]]):
-        raise NotImplementedError
+    async def set_vote_kick_threshold(self, threshold_pairs: str):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetVoteKickThreshold {threshold_pairs}"
+        return await self._send(content)
 
     async def reset_vote_kick_threshold(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"ResetVoteKickThreshold"
+        return await self._send(content)
 
     async def get_censored_words(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Profanity"
+        return await self._send(content)
 
     async def censor_words(self, words: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"BanProfanity {words}"
+        return await self._send(content)
 
     async def uncensor_words(self, words: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"UnbanProfanity {words}"
+        return await self._send(content)
 
 
 class AsyncRcon:
     """Represents a high level RCON connection to the game server and returns processed results"""
 
     _temp_ban_log_pattern = re.compile(
-        r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\""
+        r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?",
+        re.DOTALL,
+    )
+
+    _temp_ban_log_missing_steam_id_name_pattern = re.compile(
+        r"(\d{17})? :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\"",
+        re.DOTALL,
     )
 
     _perma_ban_log_pattern = re.compile(
-        r"(\d{17}) :(?: nickname \"(.*)\")? banned on (.*) for \"(.*)\" by admin \"(.*)\""
+        r"(\d{17}) :(?: nickname \"(.*)\")? banned on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?"
     )
 
     def __init__(
@@ -551,8 +642,12 @@ class AsyncRcon:
             self.connections.append(connection)
 
     @staticmethod
-    def to_list(raw_list: str) -> list[str]:
-        """Convert a game server tab delimited result string to a list"""
+    def to_hll_list(items: Iterable[str], separator: str = ",") -> str:
+        return separator.join(items)
+
+    @staticmethod
+    def from_hll_list(raw_list: str) -> list[str]:
+        """Convert a game server tab delimited result string to a native list"""
         raw_list = raw_list.strip()
 
         expected_length, *items = raw_list.split("\t")
@@ -756,7 +851,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            groups = AsyncRcon.to_list(result)
+            groups = AsyncRcon.from_hll_list(result)
 
             if not all(group in VALID_ADMIN_ROLES for group in groups):
                 raise ValueError(f"Received an invalid response from the game server")
@@ -795,10 +890,62 @@ class AsyncRcon:
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            return AsyncRcon.to_list(result)
+            return AsyncRcon.from_hll_list(result)
+
+    @staticmethod
+    def parse_player_info(raw_player_info: str) -> PlayerInfo:
+        lines = raw_player_info.strip().split("\n")
+        if len(lines) != 7:
+            raise ValueError(
+                f"Received an invalid or incomplete `PlayerInfo` from the game server"
+            )
+
+        _, player_name = lines[0].split("Name: ")
+        _, steam_id_64 = lines[1].split("steamID64: ")
+        _, raw_team = lines[2].split("Team: ")
+        _, role = lines[3].split("Role: ")
+        left, right = lines[4].split(" - ")
+        _, kills = left.split("Kills: ")
+        _, deaths = right.split("Deaths: ")
+        _, raw_scores = lines[5].split("Score: ")
+        _, level = lines[6].split("Level: ")
+
+        if raw_team == "None":
+            team = None
+        else:
+            team = raw_team
+
+        scores: dict[str, int] = {}
+        for raw_score in raw_scores.split(","):
+            key, score = raw_score.split(maxsplit=1)
+            scores[key] = int(score)
+
+        processed_score = Score(
+            kills=int(kills),
+            deaths=int(deaths),
+            combat=scores["C"],
+            offensive=scores["O"],
+            defensive=scores["D"],
+            support=scores["S"],
+        )
+
+        return PlayerInfo(
+            player_name=player_name,
+            steam_id_64=steam_id_64,
+            team=team,
+            role=role,
+            score=processed_score,
+            level=int(level),
+        )
 
     async def get_player_info(self, player_name: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_player_info(player_name=player_name)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        return result
 
     async def add_vip(self, steam_id_64: str, name: str | None):
         async with self._get_connection() as conn:
@@ -832,7 +979,7 @@ class AsyncRcon:
         return parser.parse(f"{_date} {_time}")
 
     @staticmethod
-    def parse_temp_ban_log(raw_ban: str) -> TempBanType:
+    def parse_temp_ban_log(raw_ban: str) -> TemporaryBanType | InvalidTempBanType:
         """Parse a raw HLL ban log into a TempBanType dataclass
 
         76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
@@ -850,7 +997,29 @@ class AsyncRcon:
 
             timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
 
-            ban = TempBanType(
+            ban = TemporaryBanType(
+                steam_id_64=steam_id_64,
+                player_name=player_name,
+                duration_hours=int(duration_hours),
+                timestamp=timestamp,
+                reason=reason,
+                admin=admin,
+            )
+        elif match := re.match(
+            AsyncRcon._temp_ban_log_missing_steam_id_name_pattern, raw_ban
+        ):
+            (
+                steam_id_64,
+                player_name,
+                duration_hours,
+                raw_timestamp,
+                reason,
+                admin,
+            ) = match.groups()
+
+            timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
+
+            ban = InvalidTempBanType(
                 steam_id_64=steam_id_64,
                 player_name=player_name,
                 duration_hours=int(duration_hours),
@@ -893,14 +1062,14 @@ class AsyncRcon:
 
         return ban
 
-    async def get_temp_bans(self) -> list[TempBanType]:
+    async def get_temp_bans(self) -> list[TemporaryBanType | InvalidTempBanType]:
         async with self._get_connection() as conn:
             result = await conn.get_temp_bans()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            raw_results = AsyncRcon.to_list(result)
+            raw_results = AsyncRcon.from_hll_list(result)
 
             return [
                 AsyncRcon.parse_temp_ban_log(raw_ban)
@@ -914,7 +1083,7 @@ class AsyncRcon:
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            raw_results = AsyncRcon.to_list(result)
+            raw_results = AsyncRcon.from_hll_list(result)
             return [
                 AsyncRcon.parse_perma_ban_log(raw_ban)
                 for raw_ban in raw_results
@@ -926,43 +1095,154 @@ class AsyncRcon:
     ):
         raise NotImplementedError
 
-    async def punish_player(self, player_name: str, reason: str | None):
-        raise NotImplementedError
+    async def punish_player(self, player_name: str, reason: str | None = None):
+        async with self._get_connection() as conn:
+            result = await conn.punish_player(player_name=player_name, reason=reason)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def switch_player_on_death(self, player_name: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.switch_player_on_death(player_name=player_name)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def switch_player_now(self, player_name: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.switch_player_now(player_name=player_name)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
-    async def kick_player(self, player_name: str, reason: str | None):
-        raise NotImplementedError
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
+
+    async def kick_player(self, player_name: str, reason: str | None = None):
+        async with self._get_connection() as conn:
+            result = await conn.kick_player(player_name=player_name, reason=reason)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def temp_ban_player(
         self,
-        steam_id_64: str | None,
-        player_name: str | None,
-        duration: int | None,
-        reason: str | None,
-        by_admin_name: str | None,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
+        duration: int | None = None,
+        reason: str | None = None,
+        by_admin_name: str | None = None,
     ):
-        raise NotImplementedError
+        if steam_id_64 is None and player_name is None:
+            raise ValueError(f"Must provide at least either a steam ID or player name")
+
+        try:
+            args = IntegerGreaterOrEqualToOne(value=duration)
+        except ValueError:
+            raise ValueError(f"`duration` must be an integer >= 1 or None")
+
+        async with self._get_connection() as conn:
+            result = await conn.temp_ban_player(
+                steam_id_64=steam_id_64,
+                player_name=player_name,
+                duration=args.value,
+                reason=reason,
+                by_admin_name=by_admin_name,
+            )
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def perma_ban_player(
         self,
-        steam_id_64: str | None,
-        player_name: str | None,
-        duration: int | None,
-        reason: str | None,
-        by_admin_name: str | None,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
+        reason: str | None = None,
+        by_admin_name: str | None = None,
     ):
-        raise NotImplementedError
+        if steam_id_64 is None and player_name is None:
+            raise ValueError(f"Must provide at least either a steam ID or player name")
 
-    async def remove_temp_ban(self, ban_log: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.perma_ban_player(
+                steam_id_64=steam_id_64,
+                player_name=player_name,
+                reason=reason,
+                by_admin_name=by_admin_name,
+            )
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
-    async def remove_perma_ban(self, ban_log: str):
-        raise NotImplementedError
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
+
+    async def remove_temp_ban(self, ban_log: str | TemporaryBanType):
+        # TODO: Handle invalid ban types?
+        # if isinstance(ban_log, InvalidTempBanType):
+        #     raise ValueError(f"Can'")
+
+        if isinstance(ban_log, str):
+            self.parse_temp_ban_log(ban_log)
+        else:
+            ban_log = str(ban_log)
+
+        async with self._get_connection() as conn:
+            result = await conn.remove_temp_ban(ban_log=ban_log)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
+
+    async def remove_perma_ban(self, ban_log: str | PermanentBanType):
+        # TODO: Handle invalid ban types?
+        # if isinstance(ban_log, InvalidTempBanType):
+        #     raise ValueError(f"Can'")
+
+        if isinstance(ban_log, str):
+            self.parse_perma_ban_log(ban_log)
+        else:
+            ban_log = str(ban_log)
+
+        async with self._get_connection() as conn:
+            result = await conn.remove_perma_ban(ban_log=ban_log)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def get_idle_kick_time(self):
         raise NotImplementedError
@@ -1164,23 +1444,125 @@ class AsyncRcon:
         else:
             return result == SUCCESS
 
-    async def get_vote_kick_threshold(self):
-        raise NotImplementedError
+    async def get_vote_kick_thresholds(self) -> list[VoteKickThreshold]:
+        async with self._get_connection() as conn:
+            result = await conn.get_vote_kick_thresholds()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
-    async def set_vote_kick_threshold(self, thresholds: Iterable[tuple[int, int]]):
-        raise NotImplementedError
+        def parse_vote_kick_threshold(raw_thresholds: str) -> list[VoteKickThreshold]:
+            values = raw_thresholds.split(",")
+            thresholds: list[VoteKickThreshold] = []
+            for player, vote in zip(values[0::2], values[1::2]):
+                thresholds.append(
+                    VoteKickThreshold(player_count=player, votes_required=vote)  # type: ignore
+                )
+
+            return thresholds
+
+        try:
+            return parse_vote_kick_threshold(result)
+        except ValueError:
+            raise ValueError(f"Received an invalid response from the game server")
+
+    @staticmethod
+    def convert_vote_kick_thresholds(
+        thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThreshold] | str
+    ) -> str:
+        if thresholds is None:
+            raise ValueError(
+                "Vote kick thresholds must be pairs in the form (player count, votes required)"
+            )
+
+        raw_thresholds: list[int] = []
+        if isinstance(thresholds, str):
+            if len(thresholds.split(",")) % 2 != 0:
+                raise ValueError(
+                    "Vote kick thresholds must be pairs in the form (player count, votes required), received incomplete pairs"
+                )
+            elif thresholds == "":
+                raise ValueError(
+                    "Vote kick thresholds must be pairs in the form (player count, votes required)"
+                )
+            return thresholds
+        else:
+            for item in thresholds:
+                if isinstance(item, VoteKickThreshold):
+                    raw_thresholds.append(item.player_count)
+                    raw_thresholds.append(item.votes_required)
+                elif isinstance(item, tuple):
+                    player, count = item
+                    raw_thresholds.append(player)
+                    raw_thresholds.append(count)
+                else:
+                    raise ValueError(
+                        f"Vote kick thresholds must be pairs in the form (player count, votes required), received {item=}"
+                    )
+
+        if len(raw_thresholds) % 2 != 0:
+            raise ValueError(
+                "Vote kick thresholds must be pairs in the form (player count, votes required)"
+            )
+
+        return ",".join(str(threshold) for threshold in raw_thresholds)
+
+    async def set_vote_kick_threshold(
+        self, thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThreshold] | str
+    ):
+        processed_thresholds = self.convert_vote_kick_thresholds(thresholds)
+        async with self._get_connection() as conn:
+            result = await conn.set_vote_kick_threshold(
+                threshold_pairs=processed_thresholds
+            )
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def reset_vote_kick_threshold(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.reset_vote_kick_threshold()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result not in (SUCCESS, FAIL):
+            raise ValueError(f"Received an invalid response from the game server")
+        else:
+            return result == SUCCESS
 
     async def get_censored_words(self):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.get_censored_words()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+            return AsyncRcon.from_hll_list(result)
 
-    async def censor_words(self, words: str):
-        raise NotImplementedError
+    async def censor_words(self, words: Iterable[str]):
+        raw_words = AsyncRcon.to_hll_list(words)
+        async with self._get_connection() as conn:
+            result = await conn.censor_words(words=raw_words)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
-    async def uncensor_words(self, words: str):
-        raise NotImplementedError
+        return result
+
+    async def uncensor_words(self, words: Iterable[str]):
+        raw_words = AsyncRcon.to_hll_list(words)
+        async with self._get_connection() as conn:
+            result = await conn.uncensor_words(words=raw_words)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        return result
 
 
 class Tracer(trio.abc.Instrument):
@@ -1273,11 +1655,65 @@ async def main():
     # logger.debug(await rcon.get_auto_balance_threshold())
     # logger.debug(await rcon.set_auto_balance_threshold(1))
     # logger.debug(await rcon.get_auto_balance_threshold())
-    logger.debug(await rcon.get_vote_kick_enabled())
-    logger.debug(await rcon.enable_vote_kick())
-    logger.debug(await rcon.get_vote_kick_enabled())
-    logger.debug(await rcon.disable_vote_kick())
-    logger.debug(await rcon.get_vote_kick_enabled())
+    # logger.debug(await rcon.get_vote_kick_enabled())
+    # logger.debug(await rcon.enable_vote_kick())
+    # logger.debug(await rcon.get_vote_kick_enabled())
+    # logger.debug(await rcon.disable_vote_kick())
+    # logger.debug(await rcon.get_vote_kick_enabled())
+    # logger.debug(await rcon.get_censored_words())
+    # logger.debug(await rcon.censor_words(words=["bad", "words"]))
+    # logger.debug(await rcon.get_censored_words())
+    # logger.debug(await rcon.uncensor_words(words=["bad", "words"]))
+    # logger.debug(await rcon.get_censored_words())
+    # logger.debug(await rcon.get_vote_kick_thresholds())
+    # logger.debug(await rcon.set_vote_kick_threshold([(0, 1)]))
+    # logger.debug(await rcon.get_vote_kick_thresholds())
+    # logger.debug(await rcon.reset_vote_kick_threshold())
+    # logger.debug(await rcon.get_vote_kick_thresholds())
+    # logger.debug(await rcon.get_player_info("NoodleArms"))
+    # logger.debug(await rcon.punish_player("NoodleArms", "Testing"))
+    # logger.debug(await rcon.switch_player_on_death("NoodleArms"))
+    # logger.debug(await rcon.kick_player("NoodleArms"))
+    # logger.debug(await rcon.kick_player("NoodleArms", "Testing'"))
+    # logger.debug(
+    #     await rcon.temp_ban_player(
+    #         steam_id_64="76561198004895814",
+    #         player_name=None,
+    #         duration=None,
+    #         reason=None,
+    #         by_admin_name=None,
+    #     )
+    # )
+    # logger.debug(await rcon.remove_temp_ban(TempBanType(steam_id_64="76561198004895814", player_name=None, duration=None, reason=None, admin=None)))
+    bans = await rcon.get_permanent_bans()
+    for line in bans:
+        print(line)
+
+    # 2023.03.06-20.59.29
+    logger.debug(
+        await rcon.remove_perma_ban(
+            PermanentBanType(
+                steam_id_64="76561198004895814",
+                player_name=None,
+                timestamp=datetime(
+                    year=2023, month=3, day=6, hour=20, minute=59, second=29
+                ),
+                reason=None,
+                admin=None,
+            )
+        )
+    )
+    # logger.debug(await rcon.perma_ban_player("76561198004895814"))
+
+    bans = await rcon.get_permanent_bans()
+    for line in bans:
+        print(line)
+    # logger.debug(
+    #     await rcon.remove_temp_ban(
+    #         "76561198004895814 : banned for 2 hours on 2023.03.06-15.23.26"
+    #     )
+    # )
+
     # await rcon.get_num_vip_slots()
 
     # await rcon.set_num_vip_slots()
