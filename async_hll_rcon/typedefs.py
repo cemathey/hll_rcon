@@ -1,7 +1,9 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pydantic
+
+from async_hll_rcon import constants
 
 SUCCESS = "SUCCESS"
 FAIL = "FAIL"
@@ -132,6 +134,10 @@ class IntegerGreaterOrEqualToOne(pydantic.BaseModel):
     value: pydantic.conint(ge=1) | None  # type: ignore
 
 
+class IdleKickTime(pydantic.BaseModel):
+    kick_time: pydantic.conint(ge=0)  # type: ignore
+
+
 class Score(pydantic.BaseModel):
     kills: int
     deaths: int
@@ -148,3 +154,88 @@ class PlayerInfo(pydantic.BaseModel):
     role: str
     score: Score
     level: int
+
+
+class LogTimeStamp(pydantic.BaseModel):
+    absolute_timestamp: datetime
+    relative_timestamp: timedelta
+
+
+class KillLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    player_team: str
+    victim_steam_id_64: str
+    victim_player_name: str
+    victim_team: str
+    weapon: str
+    time: LogTimeStamp
+
+
+class TeamKillLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    player_team: str
+    victim_steam_id_64: str
+    victim_player_name: str
+    victim_team: str
+    weapon: str
+    time: LogTimeStamp
+
+
+class ChatLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    player_team: str
+    scope: str
+    content: str
+    time: LogTimeStamp
+
+
+class ConnectLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    time: LogTimeStamp
+
+
+class DisconnectLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    time: LogTimeStamp
+
+
+class TeamSwitchLogType(pydantic.BaseModel):
+    player_name: str
+    from_team: str
+    to_team: str
+    time: LogTimeStamp
+
+
+class KickLogType(pydantic.BaseModel):
+    player_name: str
+    # idle eac host temp perma
+    kick_type: str
+    time: LogTimeStamp
+
+
+class BanLogType(pydantic.BaseModel):
+    player_name: str
+    # Temporary or permanent
+    ban_type: str
+    ban_duration_hours: int | None
+    reason: str
+    time: LogTimeStamp
+
+
+class MatchStartLogType(pydantic.BaseModel):
+    map_name: str
+    game_mode: str
+    time: LogTimeStamp
+
+
+class MatchEndLogType(pydantic.BaseModel):
+    map_name: str
+    game_mode: str
+    allied_score: int
+    axis_score: int
+    time: LogTimeStamp

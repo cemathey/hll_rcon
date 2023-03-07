@@ -2,14 +2,15 @@ import inspect
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import cycle
-from typing import AsyncGenerator, Iterable, Self
+from typing import AsyncGenerator, Generator, Iterable, Self
 
 import trio
 from dateutil import parser
 from loguru import logger
 
+from async_hll_rcon import constants
 from async_hll_rcon.typedefs import (
     FAIL,
     FAIL_MAP_REMOVAL,
@@ -20,13 +21,25 @@ from async_hll_rcon.typedefs import (
     Amount,
     AutoBalanceEnabled,
     AutoBalanceThreshold,
+    BanLogType,
+    ChatLogType,
+    ConnectLogType,
+    DisconnectLogType,
     HighPingLimit,
+    IdleKickTime,
     IntegerGreaterOrEqualToOne,
     InvalidTempBanType,
+    KickLogType,
+    KillLogType,
+    LogTimeStamp,
+    MatchEndLogType,
+    MatchStartLogType,
     PermanentBanType,
     PlayerInfo,
     Score,
+    TeamKillLogType,
     TeamSwitchCoolDown,
+    TeamSwitchLogType,
     TemporaryBanType,
     VoteKickEnabled,
     VoteKickThreshold,
@@ -197,7 +210,11 @@ class HllConnection:
         return await self._send(content)
 
     async def set_welcome_message(self, message: str):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({message=})"  # type: ignore
+        )
+        content = f"Say {message}"
+        return await self._send(content)
 
     async def set_broadcast_message(self, message: str | None):
         # TODO: Failing with a blank message?
@@ -214,8 +231,15 @@ class HllConnection:
     async def reset_broadcast_message(self):
         return await self.set_broadcast_message(None)
 
-    async def get_game_logs(self, minutes: int, filter: str):
-        raise NotImplementedError
+    async def get_game_logs(self, minutes: int, filter: str | None = None):
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({minutes=}, {filter=})"  # type: ignore
+        )
+        if filter is None:
+            filter = ""
+
+        content = f'ShowLog {minutes} "{filter}"'
+        return await self._send(content)
 
     async def get_current_map(self):
         logger.debug(
@@ -349,9 +373,16 @@ class HllConnection:
         return await self._send(content)
 
     async def message_player(
-        self, steam_id_64: str | None, player_name: str | None, message: str
+        self,
+        message: str,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
     ):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f'Message "{steam_id_64 or player_name}" "{message}"'
+        return await self._send(content)
 
     async def punish_player(self, player_name: str, reason: str | None = None):
         logger.debug(
@@ -444,10 +475,18 @@ class HllConnection:
         return await self._send(content)
 
     async def get_idle_kick_time(self):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"Get Idletime"
+        return await self._send(content)
 
     async def set_idle_kick_time(self, threshold_minutes: int):
-        raise NotImplementedError
+        logger.debug(
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+        )
+        content = f"SetKickIdleTime {threshold_minutes}"
+        return await self._send(content)
 
     async def get_high_ping_limit(self):
         logger.debug(
@@ -599,6 +638,33 @@ class AsyncRcon:
         r"(\d{17}) :(?: nickname \"(.*)\")? banned on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?"
     )
 
+    _kill_teamkill_pattern = re.compile(
+        r"(?:(KILL):|(TEAM KILL):) (.*)\((Allies|Axis)\/(\d{17})\) -> (.*)\((Allies|Axis)\/(\d{17})\) with (.*)"
+    )
+
+    _chat_pattern = re.compile(
+        r"CHAT\[(Team|Unit)\]\[(.*)\((Allies|Axis)/(\d{17})\)\]: (.*)"
+    )
+
+    _connect_disconnect_pattern = re.compile(
+        r"(?:(CONNECTED)|(DISCONNECTED)) (.+) \((\d{17})\)"
+    )
+
+    _teamswitch_pattern = re.compile(r"(TEAMSWITCH) (.*) \((.*) > (.*)\)")
+    # _kick_ban_pattern = re.compile(
+    #     r"(?:(KICK)|(BAN)): \[(.*)\] .*\[(KICKED|BANNED|PERMANENTLY|YOU|Host|Anti-Cheat) ([^\]]*)\n?(.*)(?:\])",
+    # )
+    _kick_ban_pattern = re.compile(
+        r"(?:(KICK)|(BAN)): \[(.*)\] has been (?:kicked|banned)\. \[(.*)\n?(.*)\]",
+    )
+    _vote_kick_pattern = None
+    _admin_cam_pattern = None
+    _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE)")
+    _match_end_pattern = re.compile(
+        r"MATCH ENDED `(.*) (WARFARE|OFFENSIVE)` ALLIED \((\d) - (\d)"
+    )
+    _message_player_pattern = None
+
     def __init__(
         self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
     ) -> None:
@@ -648,7 +714,7 @@ class AsyncRcon:
     @staticmethod
     def from_hll_list(raw_list: str) -> list[str]:
         """Convert a game server tab delimited result string to a native list"""
-        raw_list = raw_list.strip()
+        # raw_list = raw_list.strip()
 
         expected_length, *items = raw_list.split("\t")
         expected_length = int(expected_length)
@@ -657,6 +723,9 @@ class AsyncRcon:
             logger.debug(f"{expected_length=}")
             logger.debug(f"{len(items)=}")
             logger.debug(f"{items=}")
+            if len(items) > 0 and items[0] and not items[-1]:
+                logger.debug(f"{items[:-1]=}")
+                return items[:-1]
             raise ValueError("List does not match expected length")
 
         return items
@@ -727,7 +796,11 @@ class AsyncRcon:
             )
 
     async def set_welcome_message(self, message: str):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.set_welcome_message(message=message)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
     async def set_broadcast_message(self, message: str | None):
         async with self._get_connection() as conn:
@@ -753,8 +826,236 @@ class AsyncRcon:
         else:
             return result == SUCCESS
 
-    async def get_game_logs(self, minutes: int, filter: str):
-        raise NotImplementedError
+    @staticmethod
+    def relative_time_to_timedelta(relative_time: str) -> timedelta:
+        raw_time, unit = relative_time.split(maxsplit=1)
+
+        match unit:
+            case "hours":
+                hours, minutes, seconds = raw_time.split(":")
+                return timedelta(
+                    hours=float(hours), minutes=float(minutes), seconds=float(seconds)
+                )
+            case "min":
+                minutes, seconds = raw_time.split(":")
+                return timedelta(minutes=float(minutes), seconds=float(seconds))
+            case "sec":
+                seconds = float(raw_time)
+                return timedelta(seconds=seconds)
+            case "ms":
+                ms = float(raw_time)
+                return timedelta(milliseconds=ms)
+            case _:
+                raise ValueError(f"Unable to parse relative time=`{relative_time}`")
+
+    @staticmethod
+    def absolute_time_to_datetime(absolute_time: str) -> datetime:
+        # Game server time stamps are already UTC
+        return datetime.utcfromtimestamp(float(absolute_time))
+
+    @staticmethod
+    def parse_game_log(
+        raw_log: str, relative_time: str, absolute_time: str
+    ) -> (
+        KillLogType
+        | TeamKillLogType
+        | ChatLogType
+        | ConnectLogType
+        | DisconnectLogType
+        | TeamSwitchLogType
+        | KickLogType
+        | BanLogType
+        | MatchStartLogType
+        | MatchEndLogType
+        | None
+    ):
+        time = LogTimeStamp(
+            absolute_timestamp=AsyncRcon.absolute_time_to_datetime(absolute_time),
+            relative_timestamp=AsyncRcon.relative_time_to_timedelta(relative_time),
+        )
+
+        if raw_log.startswith("KILL") or raw_log.startswith("TEAM KILL"):
+            if match := re.match(AsyncRcon._kill_teamkill_pattern, raw_log):
+                (
+                    kill,
+                    team_kill,
+                    player_name,
+                    player_team,
+                    steam_id_64,
+                    victim_player_name,
+                    victim_team,
+                    victim_steam_id_64,
+                    weapon,
+                ) = match.groups()
+
+                if kill:
+                    return KillLogType(
+                        steam_id_64=steam_id_64,
+                        player_name=player_name,
+                        player_team=player_team,
+                        victim_steam_id_64=victim_steam_id_64,
+                        victim_player_name=victim_player_name,
+                        victim_team=victim_team,
+                        weapon=weapon,
+                        time=time,
+                    )
+                else:
+                    return TeamKillLogType(
+                        steam_id_64=steam_id_64,
+                        player_name=player_name,
+                        player_team=player_team,
+                        victim_steam_id_64=victim_steam_id_64,
+                        victim_player_name=victim_player_name,
+                        victim_team=victim_team,
+                        weapon=weapon,
+                        time=time,
+                    )
+
+        elif raw_log.startswith("CHAT"):
+            if match := re.match(AsyncRcon._chat_pattern, raw_log):
+                scope, player_name, team, steam_id_64, content = match.groups()
+                return ChatLogType(
+                    steam_id_64=steam_id_64,
+                    player_name=player_name,
+                    player_team=team,
+                    scope=scope,
+                    content=content,
+                    time=time,
+                )
+            else:
+                ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("CONNECTED") or raw_log.startswith("DISCONNECTED"):
+            if match := re.match(AsyncRcon._connect_disconnect_pattern, raw_log):
+                logger.debug(f"{match.groups()=}")
+                connected, disconnected, player_name, steam_id_64 = match.groups()
+                if connected:
+                    return ConnectLogType(
+                        steam_id_64=steam_id_64, player_name=player_name, time=time
+                    )
+                else:
+                    return DisconnectLogType(
+                        steam_id_64=steam_id_64, player_name=player_name, time=time
+                    )
+            else:
+                ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("TEAMSWITCH"):
+            if match := re.match(AsyncRcon._teamswitch_pattern, raw_log):
+                logger.debug(f"{match.groups()=}")
+                action, player_name, from_team, to_team = match.groups()
+                return TeamSwitchLogType(
+                    player_name=player_name,
+                    from_team=from_team,
+                    to_team=to_team,
+                    time=time,
+                )
+            else:
+                ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("BAN") or raw_log.startswith("KICK"):
+            if match := re.match(AsyncRcon._kick_ban_pattern, raw_log):
+                logger.debug(f"{match.groups()=}")
+                (
+                    kick,
+                    ban,
+                    player_name,
+                    raw_removal_type,
+                    # duration,
+                    removal_reason,
+                ) = match.groups()
+
+                removal_reason = removal_reason.strip()
+                ban_duration = None
+
+                if kick:
+                    if raw_removal_type.startswith("YOU"):
+                        removal_type = constants.IDLE_KICK
+                    elif raw_removal_type.startswith("Host"):
+                        removal_type = constants.HOST_CLOSED_CONNECTION_KICK
+                    elif raw_removal_type.startswith("KICKED"):
+                        removal_type = constants.TEAM_KILLING_KICK
+                    else:
+                        raise ValueError(f"invalid {raw_removal_type=}")
+
+                    return KickLogType(
+                        player_name=player_name, kick_type=removal_type, time=time
+                    )
+                else:
+                    if duration_match := re.match(
+                        r"BANNED FOR (\d+) HOURS", raw_removal_type
+                    ):
+                        ban_duration = int(duration_match.groups()[0])
+                        ban_type = constants.TEMPORARY_BAN
+                    else:
+                        ban_type = constants.PERMANENT_BAN
+
+                    return BanLogType(
+                        player_name=player_name,
+                        ban_type=ban_type,
+                        ban_duration_hours=ban_duration,
+                        reason=removal_reason,
+                        time=time,
+                    )
+            else:
+                raise ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("MATCH"):
+            if match := re.match(AsyncRcon._match_start_pattern, raw_log):
+                logger.debug(f"match start {match.groups()=}")
+                map_name, game_mode = match.groups()
+                return MatchStartLogType(
+                    map_name=map_name, game_mode=game_mode, time=time
+                )
+            elif match := re.match(AsyncRcon._match_end_pattern, raw_log):
+                logger.debug(f"match end {match.groups()=}")
+                map_name, game_mode, allied_score, axis_score = match.groups()
+                return MatchEndLogType(
+                    map_name=map_name,
+                    game_mode=game_mode,
+                    allied_score=int(allied_score),
+                    axis_score=int(axis_score),
+                    time=time,
+                )
+            else:
+                raise ValueError(f"Unable to parse `{raw_log}`")
+        else:
+            logger.error(f"Unable to parse `{raw_log}`")
+            raise ValueError(f"Unable to parse `{raw_log}`")
+
+    # _log_split_pattern = re.compile(r"^(\[.+? \((\d+)\)\])", re.MULTILINE)
+    _log_split_pattern = re.compile(r"^\[(.+)? \((\d+)\)\]", re.MULTILINE)
+
+    @staticmethod
+    def split_raw_log_lines(
+        raw_logs: str,
+    ) -> Generator[tuple[str, str, str], None, None]:
+        """Split raw game server logs into the line, relative time and absolute UTC timestamp"""
+        if raw_logs != "":
+            logs = raw_logs.strip("\n")
+            # logs = re.split(r"^(\[.+? \((\d+)\)\])", logs, flags=re.M)
+            logs = re.split(AsyncRcon._log_split_pattern, logs)
+
+            logs = zip(logs[1::3], logs[2::3], logs[3::3])
+            for raw_relative_time, raw_timestamp, raw_log_line in logs:
+                yield raw_log_line.strip(), raw_relative_time, raw_timestamp,
+
+    async def get_game_logs(self, minutes: int, filter: str | None = None):
+        async with self._get_connection() as conn:
+            result = await conn.get_game_logs(minutes=minutes, filter=filter)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+        if result == "EMPTY":
+            return []
+        else:
+            logs = []
+            for raw_log, relative_time, absolute_time in AsyncRcon.split_raw_log_lines(
+                result
+            ):
+                logger.debug(f"{relative_time=} {absolute_time=} {raw_log=}")
+                logs.append(
+                    AsyncRcon.parse_game_log(raw_log, relative_time, absolute_time)
+                )
+
+        return logs
 
     async def get_current_map(self):
         async with self._get_connection() as conn:
@@ -1091,9 +1392,23 @@ class AsyncRcon:
             ]
 
     async def message_player(
-        self, steam_id_64: str | None, player_name: str | None, message: str
+        self,
+        message: str,
+        steam_id_64: str | None = None,
+        player_name: str | None = None,
     ):
-        raise NotImplementedError
+        async with self._get_connection() as conn:
+            result = await conn.message_player(
+                message=message, steam_id_64=steam_id_64, player_name=player_name
+            )
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def punish_player(self, player_name: str, reason: str | None = None):
         async with self._get_connection() as conn:
@@ -1244,11 +1559,28 @@ class AsyncRcon:
             else:
                 return result == SUCCESS
 
-    async def get_idle_kick_time(self):
-        raise NotImplementedError
+    async def get_idle_kick_time(self) -> IdleKickTime:
+        async with self._get_connection() as conn:
+            result = await conn.get_idle_kick_time()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
 
-    async def set_idle_kick_time(self, threshold_minutes: int):
-        raise NotImplementedError
+            return IdleKickTime(kick_time=result)
+
+    async def set_idle_kick_time(self, threshold_minutes: int) -> bool:
+        args = IdleKickTime(kick_time=threshold_minutes)
+
+        async with self._get_connection() as conn:
+            result = await conn.set_idle_kick_time(threshold_minutes=args.kick_time)
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            if result not in (SUCCESS, FAIL):
+                raise ValueError(f"Received an invalid response from the game server")
+            else:
+                return result == SUCCESS
 
     async def get_high_ping_limit(self):
         async with self._get_connection() as conn:
@@ -1633,11 +1965,11 @@ async def main():
         # nursery.start_soon(rcon.get_admin_groups)
         # nursery.start_soon(rcon.get_temp_bans)
 
-    # logger.debug(f"===========================")
-    # bans = await rcon.get_permanent_bans()
-    # for b in bans:
-    #     if b:
-    #         print(b)
+    logger.debug(f"===========================")
+    bans = await rcon.get_permanent_bans()
+    for b in bans:
+        if b:
+            print(b)
 
     logger.debug(f"===========================")
     # logger.debug(await rcon.get_admin_groups())
@@ -1685,34 +2017,55 @@ async def main():
     #     )
     # )
     # logger.debug(await rcon.remove_temp_ban(TempBanType(steam_id_64="76561198004895814", player_name=None, duration=None, reason=None, admin=None)))
-    bans = await rcon.get_permanent_bans()
-    for line in bans:
-        print(line)
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
 
-    # 2023.03.06-20.59.29
-    logger.debug(
-        await rcon.remove_perma_ban(
-            PermanentBanType(
-                steam_id_64="76561198004895814",
-                player_name=None,
-                timestamp=datetime(
-                    year=2023, month=3, day=6, hour=20, minute=59, second=29
-                ),
-                reason=None,
-                admin=None,
-            )
-        )
-    )
+    # logger.debug(
+    #     await rcon.remove_perma_ban(
+    #         PermanentBanType(
+    #             steam_id_64="76561198004895814",
+    #             player_name=None,
+    #             timestamp=datetime(
+    #                 year=2023, month=3, day=6, hour=20, minute=59, second=29
+    #             ),
+    #             reason=None,
+    #             admin=None,
+    #         )
+    #     )
+    # )
     # logger.debug(await rcon.perma_ban_player("76561198004895814"))
 
-    bans = await rcon.get_permanent_bans()
-    for line in bans:
-        print(line)
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
     # logger.debug(
     #     await rcon.remove_temp_ban(
     #         "76561198004895814 : banned for 2 hours on 2023.03.06-15.23.26"
     #     )
     # )
+
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(1))
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(0))
+    # logger.debug(await rcon.get_idle_kick_time())
+
+    # logs = await rcon.get_game_logs(360)
+    # # logger.debug(await rcon.get_game_logs(5))
+    # print(f"{len(logs)=}")
+    # none_Logs = [l for l in logs if not l]
+    # print(f"{len(none_Logs)=}")
+
+    # logger.debug(await rcon.message_player("test message", "76561198004895814"))
+    # logger.debug(
+    #     await rcon.set_welcome_message(
+    #         "Test welcome message\nnext line\n\ntwo lines down"
+    #     )
+    # )
+
+    # for log in logs:
+    #     print(type(log))
 
     # await rcon.get_num_vip_slots()
 
