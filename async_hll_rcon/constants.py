@@ -12,3 +12,12 @@ WARFARE_GAME_MODE: Final = "WARFARE"
 TCP_TIMEOUT_READ: Final = 1
 TCP_TIMEOUT: Final = 25
 CHUNK_SIZE: Final = None
+
+SUCCESS_RESPONSE = "SUCCESS"
+FAIL_RESPONSE = "FAIL"
+FAIL_MAP_REMOVAL_RESPONSE = "Requested map name was not found"
+
+VALID_ADMIN_ROLES = ("owner", "senior", "junior", "spectator")
+
+HLL_BOOL_ENABLED = "on"
+HLL_BOOL_DISABLED = "off"

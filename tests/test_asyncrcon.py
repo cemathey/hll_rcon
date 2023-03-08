@@ -12,12 +12,12 @@ from async_hll_rcon.typedefs import (
     DisconnectLogType,
     KickLogType,
     KillLogType,
-    LogTimeStamp,
+    LogTimeStampType,
     MatchEndLogType,
     MatchStartLogType,
     PermanentBanType,
-    PlayerInfo,
-    Score,
+    PlayerInfoType,
+    ScoreType,
     TeamKillLogType,
     TeamSwitchLogType,
     TemporaryBanType,
@@ -163,12 +163,12 @@ Kills: 0 - Deaths: 0
 Score: C 0, O 0, D 0, S 0
 Level: 238
 """,
-            PlayerInfo(
+            PlayerInfoType(
                 player_name="NoodleArms",
                 steam_id_64="76561198004123456",
                 team=None,
                 role="Rifleman",
-                score=Score(
+                score=ScoreType(
                     kills=0, deaths=0, combat=0, offensive=0, defensive=0, support=0
                 ),
                 level=238,
@@ -216,7 +216,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 victim_player_name="Beevus",
                 victim_team="Axis",
                 weapon="BOMBING RUN",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -236,7 +236,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 victim_player_name="Beevus",
                 victim_team="Axis",
                 weapon="BOMBING RUN",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -254,7 +254,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 player_team="Axis",
                 scope="Team",
                 content="this server is pretty good",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -272,7 +272,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 player_team="Axis",
                 scope="Unit",
                 content="this server is pretty good",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -287,7 +287,7 @@ def test_absolute_time_to_datetime(raw, expected):
             ConnectLogType(
                 steam_id_64="76561198084123456",
                 player_name="Molotovgrl",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -302,7 +302,7 @@ def test_absolute_time_to_datetime(raw, expected):
             DisconnectLogType(
                 steam_id_64="76561198084123456",
                 player_name="BayouBanana",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -318,7 +318,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 player_name="Jack Burton",
                 from_team="None",
                 to_team="Allies",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -336,7 +336,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 ban_type=constants.TEMPORARY_BAN,
                 ban_duration_hours=2,
                 reason="Toxicity in command chat",
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -351,7 +351,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="Donny",
                 kick_type=constants.IDLE_KICK,
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -366,7 +366,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="dzkirandr",
                 kick_type=constants.HOST_CLOSED_CONNECTION_KICK,
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -381,7 +381,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="Daxter L Miller",
                 kick_type=constants.TEAM_KILLING_KICK,
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -398,7 +398,7 @@ def test_absolute_time_to_datetime(raw, expected):
                 game_mode=constants.WARFARE_GAME_MODE,
                 allied_score=1,
                 axis_score=4,
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),
@@ -413,7 +413,7 @@ def test_absolute_time_to_datetime(raw, expected):
             MatchStartLogType(
                 map_name="CARENTAN",
                 game_mode=constants.WARFARE_GAME_MODE,
-                time=LogTimeStamp(
+                time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
                     ),

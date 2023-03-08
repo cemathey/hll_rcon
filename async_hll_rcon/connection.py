@@ -6,7 +6,6 @@ import trio
 from loguru import logger
 
 from async_hll_rcon import constants
-from async_hll_rcon.typedefs import HLL_BOOL_DISABLED, HLL_BOOL_ENABLED
 
 
 class HllConnection:
@@ -535,14 +534,14 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"SetAutobalanceEnabled {HLL_BOOL_ENABLED}"
+        content = f"SetAutobalanceEnabled {constants.HLL_BOOL_ENABLED}"
         return await self._send_to_game_server(content)
 
     async def disable_auto_balance(self):
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"SetAutobalanceEnabled {HLL_BOOL_DISABLED}"
+        content = f"SetAutobalanceEnabled {constants.HLL_BOOL_DISABLED}"
         return await self._send_to_game_server(content)
 
     async def get_auto_balance_threshold(self):
@@ -570,14 +569,14 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"SetVoteKickEnabled  {HLL_BOOL_ENABLED}"
+        content = f"SetVoteKickEnabled  {constants.HLL_BOOL_ENABLED}"
         return await self._send_to_game_server(content)
 
     async def disable_vote_kick(self):
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"SetVoteKickEnabled  {HLL_BOOL_DISABLED}"
+        content = f"SetVoteKickEnabled  {constants.HLL_BOOL_DISABLED}"
         return await self._send_to_game_server(content)
 
     async def get_vote_kick_thresholds(self):

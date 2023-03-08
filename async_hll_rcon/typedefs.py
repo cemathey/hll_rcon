@@ -1,22 +1,11 @@
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pydantic
 
-from async_hll_rcon import constants
 
-SUCCESS = "SUCCESS"
-FAIL = "FAIL"
-FAIL_MAP_REMOVAL = "Requested map name was not found"
+class TemporaryBanType(pydantic.BaseModel):
+    """Represents a HLL temporary ban log"""
 
-VALID_ADMIN_ROLES = ("owner", "senior", "junior", "spectator")
-
-HLL_BOOL_ENABLED = "on"
-HLL_BOOL_DISABLED = "off"
-
-
-@dataclass()
-class TemporaryBanType:
     steam_id_64: str
     player_name: str | None
     duration_hours: int
@@ -26,7 +15,8 @@ class TemporaryBanType:
 
     @staticmethod
     def temp_ban_log_to_str(ban_log: "TemporaryBanType") -> str:
-        # 76561198004895814 : banned for 2 hours on 2023.03.06-13.44.32
+        """Convert to HLL ban log format"""
+        # 76561198004123456 : banned for 2 hours on 2023.03.06-13.44.32
 
         if ban_log.player_name is not None and ban_log.player_name != "":
             player_name = f' nickname "{ban_log.player_name}"'
@@ -51,9 +41,8 @@ class TemporaryBanType:
         return self.temp_ban_log_to_str(self)
 
 
-@dataclass()
-class InvalidTempBanType:
-    """As of v1.13.0.815373 it's possible for the game server to send back ban logs missing steam IDs"""
+class InvalidTempBanType(pydantic.BaseModel):
+    """As of HLL v1.13.0.815373 it's possible for the game server to send back ban logs missing steam IDs"""
 
     steam_id_64: str | None
     player_name: str | None
@@ -63,8 +52,9 @@ class InvalidTempBanType:
     admin: str | None
 
 
-@dataclass()
-class PermanentBanType:
+class PermanentBanType(pydantic.BaseModel):
+    """Represents a HLL permanent ban log"""
+
     steam_id_64: str
     player_name: str | None
     timestamp: datetime
@@ -73,7 +63,7 @@ class PermanentBanType:
 
     @staticmethod
     def perma_ban_log_to_str(ban_log: "PermanentBanType") -> str:
-        # 76561198004895814 : banned for 2 hours on 2023.03.06-13.44.32
+        """Convert to HLL ban log format"""
 
         if ban_log.player_name is not None and ban_log.player_name != "":
             player_name = f' nickname "{ban_log.player_name}"'
@@ -100,45 +90,40 @@ class PermanentBanType:
         return self.perma_ban_log_to_str(self)
 
 
-@dataclass()
-class VoteKickThreshold:
+class VoteKickThresholdType:
     player_count: int
     votes_required: int
 
 
-class HighPingLimit(pydantic.BaseModel):
+class HighPingLimitType(pydantic.BaseModel):
     limit: pydantic.conint(ge=0)  # type: ignore
 
 
-class AutoBalanceEnabled(pydantic.BaseModel):
+class AutoBalanceEnabledType(pydantic.BaseModel):
     enabled: bool
 
 
-class VoteKickEnabled(pydantic.BaseModel):
+class VoteKickEnabledType(pydantic.BaseModel):
     enabled: bool
 
 
-class TeamSwitchCoolDown(pydantic.BaseModel):
+class TeamSwitchCoolDownType(pydantic.BaseModel):
     cooldown: pydantic.conint(ge=0)  # type: ignore
 
 
-class AutoBalanceThreshold(pydantic.BaseModel):
+class AutoBalanceThresholdType(pydantic.BaseModel):
     threshold: pydantic.conint(ge=0)  # type: ignore
 
 
-class Amount(pydantic.BaseModel):
-    amount: pydantic.conint(ge=1)  # type: ignore
-
-
 class IntegerGreaterOrEqualToOne(pydantic.BaseModel):
-    value: pydantic.conint(ge=1) | None  # type: ignore
+    value: pydantic.conint(ge=1)  # type: ignore
 
 
-class IdleKickTime(pydantic.BaseModel):
+class IdleKickTimeType(pydantic.BaseModel):
     kick_time: pydantic.conint(ge=0)  # type: ignore
 
 
-class Score(pydantic.BaseModel):
+class ScoreType(pydantic.BaseModel):
     kills: int
     deaths: int
     combat: int
@@ -147,16 +132,16 @@ class Score(pydantic.BaseModel):
     support: int
 
 
-class PlayerInfo(pydantic.BaseModel):
+class PlayerInfoType(pydantic.BaseModel):
     player_name: str
     steam_id_64: str
     team: str | None
     role: str
-    score: Score
+    score: ScoreType
     level: int
 
 
-class LogTimeStamp(pydantic.BaseModel):
+class LogTimeStampType(pydantic.BaseModel):
     absolute_timestamp: datetime
     relative_timestamp: timedelta
 
@@ -169,7 +154,7 @@ class KillLogType(pydantic.BaseModel):
     victim_player_name: str
     victim_team: str
     weapon: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class TeamKillLogType(pydantic.BaseModel):
@@ -180,7 +165,7 @@ class TeamKillLogType(pydantic.BaseModel):
     victim_player_name: str
     victim_team: str
     weapon: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class ChatLogType(pydantic.BaseModel):
@@ -189,33 +174,33 @@ class ChatLogType(pydantic.BaseModel):
     player_team: str
     scope: str
     content: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class ConnectLogType(pydantic.BaseModel):
     steam_id_64: str
     player_name: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class DisconnectLogType(pydantic.BaseModel):
     steam_id_64: str
     player_name: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class TeamSwitchLogType(pydantic.BaseModel):
     player_name: str
     from_team: str
     to_team: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class KickLogType(pydantic.BaseModel):
     player_name: str
     # idle eac host temp perma
     kick_type: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class BanLogType(pydantic.BaseModel):
@@ -224,13 +209,13 @@ class BanLogType(pydantic.BaseModel):
     ban_type: str
     ban_duration_hours: int | None
     reason: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class MatchStartLogType(pydantic.BaseModel):
     map_name: str
     game_mode: str
-    time: LogTimeStamp
+    time: LogTimeStampType
 
 
 class MatchEndLogType(pydantic.BaseModel):
@@ -238,4 +223,4 @@ class MatchEndLogType(pydantic.BaseModel):
     game_mode: str
     allied_score: int
     axis_score: int
-    time: LogTimeStamp
+    time: LogTimeStampType
