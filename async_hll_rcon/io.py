@@ -55,13 +55,13 @@ class HllConnection:
         self.ip_addr = ip_addr
         self.port = int(port)
         self.password = password
-        self._xor_key: bytes
+        self.xor_key: bytes
         self._connection: trio.SocketStream | None = None
         self.logged_in = False
 
-    @classmethod
-    def _xor_encode(
-        cls, message: str | bytes, xor_key: bytes, encoding: str = "utf-8"
+    @staticmethod
+    def xor_encode(
+        message: str | bytes, xor_key: bytes, encoding: str = "utf-8"
     ) -> bytes:
         """XOR encrypt the given message with the given XOR key"""
         if isinstance(message, str):
@@ -74,10 +74,10 @@ class HllConnection:
             ]
         )
 
-    @classmethod
-    def _xor_decode(cls, cipher_text: str | bytes, xor_key: bytes) -> str:
+    @staticmethod
+    def xor_decode(cipher_text: str | bytes, xor_key: bytes) -> str:
         """XOR decrypt the given cipher text with the given XOR key"""
-        return cls._xor_encode(cipher_text, xor_key).decode("utf-8")
+        return HllConnection.xor_encode(cipher_text, xor_key).decode("utf-8")
 
     @classmethod
     async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
@@ -85,10 +85,6 @@ class HllConnection:
         instance = HllConnection(ip_addr, port, password)
         await instance.connect()
         return instance
-
-    @property
-    def xor_key(self):
-        return self._xor_key
 
     @property
     def connection(self) -> trio.SocketStream:
@@ -115,7 +111,7 @@ class HllConnection:
         # subsequent requests require
         with trio.move_on_after(TCP_TIMEOUT):
             logger.debug(f"{id(self)} Getting XOR key in {id(self)}")
-            self._xor_key = await self.connection.receive_some()
+            self.xor_key = await self.connection.receive_some()
             logger.debug(f"{id(self)} Got XOR key={self.xor_key} in {id(self)}")
 
         with trio.move_on_after(TCP_TIMEOUT):
@@ -127,7 +123,7 @@ class HllConnection:
     async def _send(self, content: str):
         """XOR the content and sendd to the game server, returning the game server response"""
         logger.debug(f"{id(self)} Sending {content=} to the game server")
-        xored_content = HllConnection._xor_encode(content, self.xor_key)
+        xored_content = HllConnection.xor_encode(content, self.xor_key)
 
         results: list[bytes] = []
 
@@ -150,8 +146,8 @@ class HllConnection:
                 raise ValueError(f"timed out while receiving response")
 
         combined_results = b"".join(results)
-        logger.debug(f"{HllConnection._xor_decode(combined_results, self.xor_key)}")
-        return HllConnection._xor_decode(combined_results, self.xor_key)
+        logger.debug(f"{HllConnection.xor_decode(combined_results, self.xor_key)}")
+        return HllConnection.xor_decode(combined_results, self.xor_key)
 
     async def login(self):
         logger.debug(
@@ -723,6 +719,9 @@ class AsyncRcon:
             logger.debug(f"{expected_length=}")
             logger.debug(f"{len(items)=}")
             logger.debug(f"{items=}")
+            if len(items) == 1 and not items[0]:
+                return []
+
             if len(items) > 0 and items[0] and not items[-1]:
                 logger.debug(f"{items[:-1]=}")
                 return items[:-1]
