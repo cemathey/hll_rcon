@@ -44,7 +44,7 @@ from async_hll_rcon.typedefs import (
 
 
 class AsyncRcon:
-    """Represents a high level RCON connection to the game server and returns processed results"""
+    """Represents a high level RCON pool of game server connections and returns processed results"""
 
     _temp_ban_log_pattern = re.compile(
         r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?",
@@ -88,11 +88,19 @@ class AsyncRcon:
     _message_player_pattern = None
 
     def __init__(
-        self, ip_addr: str, port: str, password: str, connection_pool_size: int = 1
+        self,
+        ip_addr: str,
+        port: str,
+        password: str,
+        connection_pool_size: int = 1,
+        receive_timeout: int = constants.TCP_TIMEOUT_READ,
+        tcp_timeout: int = constants.TCP_TIMEOUT,
     ) -> None:
         self._ip_addr = ip_addr
         self._port = int(port)
         self._password = password
+        self._receive_timeout = receive_timeout
+        self._tcp_timeout = tcp_timeout
         self.connections: list[HllConnection] = []
 
         # TODO: Pydantic validation
@@ -107,7 +115,11 @@ class AsyncRcon:
 
         async def _inner_setup():
             connection = await HllConnection.setup(
-                self._ip_addr, self._port, self._password
+                self._ip_addr,
+                self._port,
+                self._password,
+                self._receive_timeout,
+                self._tcp_timeout,
             )
             logger.debug(
                 f"Connection {_+1}/{self.connection_pool_size} {id(self)} opened"

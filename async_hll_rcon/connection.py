@@ -90,9 +90,16 @@ class HllConnection:
         return HllConnection.xor_encode(cipher_text, xor_key).decode("utf-8")
 
     @classmethod
-    async def setup(cls, ip_addr: str, port: int, password: str) -> Self:
+    async def setup(
+        cls,
+        ip_addr: str,
+        port: int,
+        password: str,
+        receive_timeout: int,
+        tcp_timeout: int,
+    ) -> Self:
         """Create and return an instance after it has connected to the game server"""
-        instance = HllConnection(ip_addr, port, password)
+        instance = HllConnection(ip_addr, port, password, receive_timeout, tcp_timeout)
         await instance.connect()
         return instance
 
