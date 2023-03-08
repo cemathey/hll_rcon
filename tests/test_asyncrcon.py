@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 import pytest
 
 from async_hll_rcon import constants
-from async_hll_rcon.io import AsyncRcon, HllConnection
+from async_hll_rcon.connection import HllConnection
+from async_hll_rcon.rcon import AsyncRcon
 from async_hll_rcon.typedefs import (
     BanLogType,
     ChatLogType,
