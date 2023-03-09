@@ -358,7 +358,6 @@ class AsyncRcon:
                 ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("CONNECTED") or raw_log.startswith("DISCONNECTED"):
             if match := re.match(AsyncRcon._connect_disconnect_pattern, raw_log):
-                # logger.debug(f"{match.groups()=}")
                 connected, disconnected, player_name, steam_id_64 = match.groups()
                 if connected:
                     return ConnectLogType(
@@ -372,7 +371,6 @@ class AsyncRcon:
                 ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("TEAMSWITCH"):
             if match := re.match(AsyncRcon._teamswitch_pattern, raw_log):
-                # logger.debug(f"{match.groups()=}")
                 action, player_name, from_team, to_team = match.groups()
                 return TeamSwitchLogType(
                     player_name=player_name,
@@ -384,7 +382,6 @@ class AsyncRcon:
                 ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("BAN") or raw_log.startswith("KICK"):
             if match := re.match(AsyncRcon._kick_ban_pattern, raw_log):
-                # logger.debug(f"{match.groups()=}")
                 (
                     kick,
                     ban,
@@ -430,13 +427,11 @@ class AsyncRcon:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("MATCH"):
             if match := re.match(AsyncRcon._match_start_pattern, raw_log):
-                # logger.debug(f"match start {match.groups()=}")
                 map_name, game_mode = match.groups()
                 return MatchStartLogType(
                     map_name=map_name, game_mode=game_mode, time=time
                 )
             elif match := re.match(AsyncRcon._match_end_pattern, raw_log):
-                # logger.debug(f"match end {match.groups()=}")
                 map_name, game_mode, allied_score, axis_score = match.groups()
                 return MatchEndLogType(
                     map_name=map_name,
@@ -451,8 +446,9 @@ class AsyncRcon:
             logger.error(f"Unable to parse `{raw_log}`")
             raise ValueError(f"Unable to parse `{raw_log}`")
 
-    # _log_split_pattern = re.compile(r"^(\[.+? \((\d+)\)\])", re.MULTILINE)
-    _log_split_pattern = re.compile(r"^\[(.+)? \((\d+)\)\]", re.MULTILINE)
+    _log_split_pattern = re.compile(
+        r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
+    )
 
     @staticmethod
     def split_raw_log_lines(
@@ -461,11 +457,19 @@ class AsyncRcon:
         """Split raw game server logs into the line, relative time and absolute UTC timestamp"""
         if raw_logs != "":
             logs = raw_logs.strip("\n")
-            # logs = re.split(r"^(\[.+? \((\d+)\)\])", logs, flags=re.M)
-            logs = re.split(AsyncRcon._log_split_pattern, logs)
+            split_logs = re.split(AsyncRcon._log_split_pattern, logs)
 
-            logs = zip(logs[1::3], logs[2::3], logs[3::3])
-            for raw_relative_time, raw_timestamp, raw_log_line in logs:
+            # The first entry is an empty string because of re.split matching group behavior
+            # but if the overall number of splits isn't divisible by 3 (number of splits)
+            # then we have an issue and have a malformed result, or broken split pattern
+            if (len(split_logs) - 1) % 3 != 0:
+                raise ValueError(
+                    f"Received an incomplete game log result from the game server"
+                )
+
+            for raw_relative_time, raw_timestamp, raw_log_line in zip(
+                split_logs[1::3], split_logs[2::3], split_logs[3::3]
+            ):
                 yield raw_log_line.strip(), raw_relative_time, raw_timestamp,
 
     async def get_game_logs(self, minutes: int, filter: str | None = None):
@@ -482,7 +486,6 @@ class AsyncRcon:
             for raw_log, relative_time, absolute_time in AsyncRcon.split_raw_log_lines(
                 result
             ):
-                # logger.debug(f"{relative_time=} {absolute_time=} {raw_log=}")
                 logs.append(
                     AsyncRcon.parse_game_log(raw_log, relative_time, absolute_time)
                 )
