@@ -224,3 +224,51 @@ class MatchEndLogType(pydantic.BaseModel):
     allied_score: int
     axis_score: int
     time: LogTimeStampType
+
+
+class AdminCamLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    kind: str
+    time: LogTimeStampType
+
+
+class VoteKickStartedLogType(pydantic.BaseModel):
+    player_name: str
+    victim_player_name: str
+    vote_type: str
+    vote_id: int
+    time: LogTimeStampType
+
+
+class VoteKickPlayerVoteLogType(pydantic.BaseModel):
+    player_name: str
+    vote_type: str
+    vote_id: int
+    time: LogTimeStampType
+
+
+class VoteKickPassedLogType(pydantic.BaseModel):
+    vote_result: str
+    vote_id: int
+    time: LogTimeStampType
+
+
+class VoteKickExpiredLogType(pydantic.BaseModel):
+    vote_id: int
+    time: LogTimeStampType
+
+
+class VoteKickResultsLogType(pydantic.BaseModel):
+    victim_player_name: str
+    for_votes: int
+    against_votes: int
+    total_votes: int
+    time: LogTimeStampType
+
+
+class MessagedPlayerLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
+    message: str
+    time: LogTimeStampType

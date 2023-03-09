@@ -11,6 +11,7 @@ from loguru import logger
 from async_hll_rcon import constants
 from async_hll_rcon.connection import HllConnection
 from async_hll_rcon.typedefs import (
+    AdminCamLogType,
     AutoBalanceEnabledType,
     AutoBalanceThresholdType,
     BanLogType,
@@ -26,6 +27,7 @@ from async_hll_rcon.typedefs import (
     LogTimeStampType,
     MatchEndLogType,
     MatchStartLogType,
+    MessagedPlayerLogType,
     PermanentBanType,
     PlayerInfoType,
     ScoreType,
@@ -34,6 +36,11 @@ from async_hll_rcon.typedefs import (
     TeamSwitchLogType,
     TemporaryBanType,
     VoteKickEnabledType,
+    VoteKickExpiredLogType,
+    VoteKickPassedLogType,
+    VoteKickPlayerVoteLogType,
+    VoteKickResultsLogType,
+    VoteKickStartedLogType,
     VoteKickThresholdType,
 )
 
@@ -68,19 +75,35 @@ class AsyncRcon:
     )
 
     _teamswitch_pattern = re.compile(r"(TEAMSWITCH) (.*) \((.*) > (.*)\)")
-    # _kick_ban_pattern = re.compile(
-    #     r"(?:(KICK)|(BAN)): \[(.*)\] .*\[(KICKED|BANNED|PERMANENTLY|YOU|Host|Anti-Cheat) ([^\]]*)\n?(.*)(?:\])",
-    # )
     _kick_ban_pattern = re.compile(
         r"(?:(KICK)|(BAN)): \[(.*)\] has been (?:kicked|banned)\. \[(.*)\n?(.*)\]",
+        re.DOTALL,
     )
     _vote_kick_pattern = None
-    _admin_cam_pattern = None
+    _vote_started_pattern = re.compile(
+        r"VOTESYS: Player \[(.*)\] Started a vote of type \((.*)\) against \[(.*)\]. VoteID: \[(\d+)\]"
+    )
+    _player_voted_pattern = re.compile(
+        r"VOTESYS: Player \[(.*)\] voted \[(.*)\] for VoteID\[(\d+)\]"
+    )
+    _vote_completed_pattern = re.compile(
+        r"VOTESYS: Vote \[(\d+)\] completed\. Result: (.*)"
+    )
+    _vote_expired_pattern = re.compile(
+        r"VOTESYS: Vote \[(\d+)\] expired before completion."
+    )
+    _vote_results_pattern = re.compile(
+        r"VOTESYS: Vote Kick {(.*)} successfully passed. \[For: (\d+)\/(\d+) - Against: (\d+)"
+    )
+    # _admin_cam_pattern = r"\[(.*)\s{1}\((\d{17})\)\]"
+    _admin_cam_pattern = r"Player \[(.*) \((\d{17})\)\] (Entered|Left) Admin Camera"
     _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE)")
     _match_end_pattern = re.compile(
         r"MATCH ENDED `(.*) (WARFARE|OFFENSIVE)` ALLIED \((\d) - (\d)"
     )
-    _message_player_pattern = None
+    _message_player_pattern = re.compile(
+        r"MESSAGE: player \[(.+)\((\d+)\)\], content \[(.+)\]", re.DOTALL
+    )
 
     def __init__(
         self,
@@ -299,6 +322,13 @@ class AsyncRcon:
         | BanLogType
         | MatchStartLogType
         | MatchEndLogType
+        | AdminCamLogType
+        | VoteKickPlayerVoteLogType
+        | VoteKickPassedLogType
+        | VoteKickStartedLogType
+        | VoteKickResultsLogType
+        | MessagedPlayerLogType
+        | VoteKickExpiredLogType
         | None
     ):
         time = LogTimeStampType(
@@ -401,8 +431,12 @@ class AsyncRcon:
                         removal_type = constants.HOST_CLOSED_CONNECTION_KICK
                     elif raw_removal_type.startswith("KICKED"):
                         removal_type = constants.TEAM_KILLING_KICK
+                    elif raw_removal_type.startswith("Anti-"):
+                        removal_type = constants.ANTI_CHEAT_TIMEOUT_KICK
+                    elif raw_removal_type.startswith("BANNED FOR"):
+                        removal_type = constants.TEMPORARY_BAN_KICK
                     else:
-                        raise ValueError(f"invalid {raw_removal_type=}")
+                        raise ValueError(f"invalid {raw_removal_type=} {raw_log=}")
 
                     return KickLogType(
                         player_name=player_name, kick_type=removal_type, time=time
@@ -442,9 +476,81 @@ class AsyncRcon:
                 )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("Player"):
+            if match := re.match(AsyncRcon._admin_cam_pattern, raw_log):
+                player_name, steam_id_64, entered_exited = match.groups()
+
+                if entered_exited == "Entered":
+                    kind = constants.ADMIN_CAM_ENTERED
+                elif entered_exited == "Left":
+                    kind = constants.ADMIN_CAM_LEFT
+                else:
+                    raise ValueError(f"invalid {entered_exited=} {raw_log=}")
+
+                return AdminCamLogType(
+                    steam_id_64=steam_id_64,
+                    player_name=player_name,
+                    kind=kind,
+                    time=time,
+                )
+            else:
+                raise ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("VOTESYS"):
+            if match := re.match(AsyncRcon._player_voted_pattern, raw_log):
+                player_name, vote_type, vote_id = match.groups()
+                return VoteKickPlayerVoteLogType(
+                    player_name=player_name,
+                    vote_type=vote_type,
+                    vote_id=int(vote_id),
+                    time=time,
+                )
+            elif match := re.match(AsyncRcon._vote_completed_pattern, raw_log):
+                vote_id, vote_result = match.groups()
+                return VoteKickPassedLogType(
+                    vote_result=vote_result, vote_id=int(vote_id), time=time
+                )
+            elif match := re.match(AsyncRcon._vote_expired_pattern, raw_log):
+                vote_id = match.groups()[0]
+                return VoteKickExpiredLogType(vote_id=int(vote_id), time=time)
+            elif match := re.match(AsyncRcon._vote_started_pattern, raw_log):
+                player_name, vote_type, victim_player_name, vote_id = match.groups()
+                return VoteKickStartedLogType(
+                    player_name=player_name,
+                    victim_player_name=victim_player_name,
+                    vote_type=vote_type,
+                    vote_id=int(vote_id),
+                    time=time,
+                )
+            elif match := re.match(AsyncRcon._vote_results_pattern, raw_log):
+                (
+                    victim_player_name,
+                    for_votes,
+                    total_votes,
+                    against_votes,
+                ) = match.groups()
+                return VoteKickResultsLogType(
+                    victim_player_name=victim_player_name,
+                    for_votes=int(for_votes),
+                    against_votes=int(against_votes),
+                    total_votes=int(total_votes),
+                    time=time,
+                )
+            else:
+                raise ValueError(f"Unable to parse `{raw_log}`")
+        elif raw_log.startswith("MESSAGE"):
+            if match := re.match(AsyncRcon._message_player_pattern, raw_log):
+                player_name, steam_id_64, message = match.groups()
+                return MessagedPlayerLogType(
+                    steam_id_64=steam_id_64,
+                    player_name=player_name,
+                    message=message,
+                    time=time,
+                )
+            else:
+                raise ValueError(f"Unable to parse `{raw_log}`")
         else:
-            logger.error(f"Unable to parse `{raw_log}`")
-            raise ValueError(f"Unable to parse `{raw_log}`")
+            logger.error(f"Unable to parse `{raw_log}` (fell through)")
+            raise ValueError(f"Unable to parse `{raw_log}` (fell through)")
 
     _log_split_pattern = re.compile(
         r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
