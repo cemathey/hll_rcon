@@ -165,13 +165,20 @@ class AsyncRcon:
 
     @staticmethod
     def from_hll_list(raw_list: str) -> list[str]:
-        """Convert a game server tab delimited result string to a native list"""
+        """Convert a game server tab delimited result string to a native list
+
+        Raises
+            ValueError: if the parsed number of items is less than the indicated number of items,
+                does not raise if extra items are present because some commands such as get_temp_bans
+                return results with empty entries and others include trailing values so it is difficult
+                to definitively establish how many elements are in a list
+        """
         # raw_list = raw_list.strip()
 
         expected_length, *items = raw_list.split("\t")
         expected_length = int(expected_length)
 
-        if len(items) != expected_length:
+        if len(items) < expected_length:
             logger.debug(f"{expected_length=}")
             logger.debug(f"{len(items)=}")
             logger.debug(f"{items=}")
@@ -269,9 +276,9 @@ class AsyncRcon:
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def reset_broadcast_message(self):
+    async def clear_broadcast_message(self):
         async with self._get_connection() as conn:
-            result = await conn.reset_broadcast_message()
+            result = await conn.clear_broadcast_message()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
@@ -421,27 +428,60 @@ class AsyncRcon:
                     removal_reason,
                 ) = match.groups()
 
-                removal_reason = removal_reason.strip()
+                # removal_reason = None
                 ban_duration = None
 
                 if kick:
-                    if raw_removal_type.startswith("YOU"):
+                    if raw_removal_type.startswith("YOU WERE"):
                         removal_type = constants.IDLE_KICK
+                        removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("Host"):
+                        # logger.warning(f"{removal_reason=} {raw_log=}")
                         removal_type = constants.HOST_CLOSED_CONNECTION_KICK
-                    elif raw_removal_type.startswith("KICKED"):
+                        removal_reason = raw_removal_type.strip()
+                    elif raw_removal_type.startswith("KICKED FOR"):
                         removal_type = constants.TEAM_KILLING_KICK
+                    elif raw_removal_type.startswith("KICKED BY THE"):
+                        removal_type = constants.ADMIN_KICK
+                        _, removal_reason = raw_removal_type.split("!", maxsplit=1)
+                        removal_reason = removal_reason.strip()
                     elif raw_removal_type.startswith("Anti-"):
                         removal_type = constants.ANTI_CHEAT_TIMEOUT_KICK
+                        removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("BANNED FOR"):
                         removal_type = constants.TEMPORARY_BAN_KICK
+                        _, removal_reason = raw_removal_type.split("!", maxsplit=1)
+                        removal_reason = removal_reason.strip()
+                    elif raw_removal_type.startswith("PERMANENTLY"):
+                        removal_type = constants.PERMANENT_BAN_KICK
+                        _, removal_reason = raw_removal_type.split("!", maxsplit=1)
+                        removal_reason = removal_reason.strip()
                     else:
-                        raise ValueError(f"invalid {raw_removal_type=} {raw_log=}")
+                        removal_type = "invalid"
+                        logger.error(f"invalid {raw_removal_type=} {raw_log=}")
+                        # raise ValueError(f"invalid {raw_removal_type=} {raw_log=}")
+
+                    if removal_reason == "":
+                        logger.error(f"invalid {removal_reason=}")
 
                     return KickLogType(
-                        player_name=player_name, kick_type=removal_type, time=time
+                        player_name=player_name,
+                        kick_type=removal_type,
+                        reason=removal_reason,
+                        time=time,
                     )
+                    logger.warning(f"{k}")
+                    return k
                 else:
+                    if raw_removal_type.startswith(
+                        "PERMA"
+                    ) or raw_removal_type.startswith("BAN"):
+                        _, removal_reason = raw_removal_type.split("!", maxsplit=1)
+                        removal_reason = removal_reason.strip()
+                    else:
+                        logger.warning(f"no match for {raw_removal_type=}")
+
+                    # logger.warning(f"{ban=} {removal_reason=}")
                     if duration_match := re.match(
                         r"BANNED FOR (\d+) HOURS", raw_removal_type
                     ):
@@ -450,6 +490,12 @@ class AsyncRcon:
                     else:
                         ban_type = constants.PERMANENT_BAN
 
+                    if removal_reason is None or removal_reason == "":
+                        # logger.error(
+                        #     f"{player_name=} {ban_type=} {ban_duration=} {removal_reason=}"
+                        # )
+                        logger.error(f"{raw_log=}")
+
                     return BanLogType(
                         player_name=player_name,
                         ban_type=ban_type,
@@ -457,6 +503,8 @@ class AsyncRcon:
                         reason=removal_reason,
                         time=time,
                     )
+                    logger.warning(f"{b}")
+                    return b
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("MATCH"):
@@ -525,14 +573,14 @@ class AsyncRcon:
                 (
                     victim_player_name,
                     for_votes,
-                    total_votes,
+                    votes_required,
                     against_votes,
                 ) = match.groups()
                 return VoteKickResultsLogType(
                     victim_player_name=victim_player_name,
                     for_votes=int(for_votes),
                     against_votes=int(against_votes),
-                    total_votes=int(total_votes),
+                    votes_required=int(votes_required),
                     time=time,
                 )
             else:
@@ -550,7 +598,7 @@ class AsyncRcon:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         else:
             logger.error(f"Unable to parse `{raw_log}` (fell through)")
-            raise ValueError(f"Unable to parse `{raw_log}` (fell through)")
+            # raise ValueError(f"Unable to parse `{raw_log}` (fell through)")
 
     _log_split_pattern = re.compile(
         r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
@@ -679,6 +727,7 @@ class AsyncRcon:
             )
 
     async def get_player_steam_ids(self):
+        # TODO: format result
         async with self._get_connection() as conn:
             result = await conn.get_player_steam_ids()
             logger.debug(
@@ -1009,7 +1058,7 @@ class AsyncRcon:
         self,
         steam_id_64: str | None = None,
         player_name: str | None = None,
-        duration: int | None = None,
+        duration_hours: int | None = None,
         reason: str | None = None,
         by_admin_name: str | None = None,
     ):
@@ -1017,7 +1066,7 @@ class AsyncRcon:
             raise ValueError(f"Must provide at least either a steam ID or player name")
 
         try:
-            args = IntegerGreaterOrEqualToOne(value=duration)
+            args = IntegerGreaterOrEqualToOne(value=duration_hours)
         except ValueError:
             raise ValueError(f"`duration` must be an integer >= 1 or None")
 
@@ -1025,7 +1074,7 @@ class AsyncRcon:
             result = await conn.temp_ban_player(
                 steam_id_64=steam_id_64,
                 player_name=player_name,
-                duration=args.value,
+                duration_hours=args.value,
                 reason=reason,
                 by_admin_name=by_admin_name,
             )
@@ -1401,14 +1450,15 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
+        # TODO: report error message from the game server
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
             raise ValueError(f"Received an invalid response from the game server")
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def reset_vote_kick_threshold(self):
+    async def clear_vote_kick_threshold(self):
         async with self._get_connection() as conn:
-            result = await conn.reset_vote_kick_threshold()
+            result = await conn.clear_vote_kick_threshold()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )

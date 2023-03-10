@@ -200,6 +200,7 @@ class KickLogType(pydantic.BaseModel):
     player_name: str
     # idle eac host temp perma
     kick_type: str
+    reason: str | None
     time: LogTimeStampType
 
 
@@ -263,8 +264,12 @@ class VoteKickResultsLogType(pydantic.BaseModel):
     victim_player_name: str
     for_votes: int
     against_votes: int
-    total_votes: int
+    votes_required: int
     time: LogTimeStampType
+
+    @property
+    def total_votes(self):
+        return self.for_votes + self.against_votes
 
 
 class MessagedPlayerLogType(pydantic.BaseModel):
