@@ -48,32 +48,29 @@ from async_hll_rcon.typedefs import (
 class AsyncRcon:
     """Represents a high level RCON pool of game server connections and returns processed results"""
 
+    # Ban log patterns
     _temp_ban_log_pattern = re.compile(
         r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?",
         re.DOTALL,
     )
-
     _temp_ban_log_missing_steam_id_name_pattern = re.compile(
         r"(\d{17})? :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\"",
         re.DOTALL,
     )
-
     _perma_ban_log_pattern = re.compile(
         r"(\d{17}) :(?: nickname \"(.*)\")? banned on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?"
     )
 
+    # Game log patterns
     _kill_teamkill_pattern = re.compile(
         r"(?:(KILL):|(TEAM KILL):) (.*)\((Allies|Axis)\/(\d{17})\) -> (.*)\((Allies|Axis)\/(\d{17})\) with (.*)"
     )
-
     _chat_pattern = re.compile(
         r"CHAT\[(Team|Unit)\]\[(.*)\((Allies|Axis)/(\d{17})\)\]: (.*)"
     )
-
     _connect_disconnect_pattern = re.compile(
         r"(?:(CONNECTED)|(DISCONNECTED)) (.+) \((\d{17})\)"
     )
-
     _teamswitch_pattern = re.compile(r"(TEAMSWITCH) (.*) \((.*) > (.*)\)")
     _kick_ban_pattern = re.compile(
         r"(?:(KICK)|(BAN)): \[(.*)\] has been (?:kicked|banned)\. \[(.*)\n?(.*)\]",
@@ -95,7 +92,6 @@ class AsyncRcon:
     _vote_results_pattern = re.compile(
         r"VOTESYS: Vote Kick {(.*)} successfully passed. \[For: (\d+)\/(\d+) - Against: (\d+)"
     )
-    # _admin_cam_pattern = r"\[(.*)\s{1}\((\d{17})\)\]"
     _admin_cam_pattern = r"Player \[(.*) \((\d{17})\)\] (Entered|Left) Admin Camera"
     _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE)")
     _match_end_pattern = re.compile(
@@ -103,6 +99,12 @@ class AsyncRcon:
     )
     _message_player_pattern = re.compile(
         r"MESSAGE: player \[(.+)\((\d+)\)\], content \[(.+)\]", re.DOTALL
+    )
+
+    # Used to split the new line delimited results from get_game_logs() while
+    # preserving new lines that are part of the log line
+    _log_split_pattern = re.compile(
+        r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
     )
 
     def __init__(
@@ -599,10 +601,6 @@ class AsyncRcon:
         else:
             logger.error(f"Unable to parse `{raw_log}` (fell through)")
             # raise ValueError(f"Unable to parse `{raw_log}` (fell through)")
-
-    _log_split_pattern = re.compile(
-        r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
-    )
 
     @staticmethod
     def split_raw_log_lines(
