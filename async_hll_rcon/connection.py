@@ -1,11 +1,74 @@
 import inspect
 from itertools import cycle
-from typing import Self
+from typing import Callable, Self
 
 import trio
 from loguru import logger
 
 from async_hll_rcon import constants
+
+
+def _validator_player_info(player_info: str, player_name: str | None = None) -> bool:
+    """Return if the result from get_player_info appears to be complete"""
+    logger.debug(f"_validator_player_info({player_info=}, {player_name=})")
+    is_complete = True
+
+    mandatory_keys_without_unit = [
+        "Name",
+        "steamID64",
+        "Team",
+        "Role",
+        # "Unit",
+        "Loadout",
+        "Kills",
+        "Score",
+        "Level",
+        "",
+    ]
+
+    mandatory_keys_with_unit = [
+        "Name",
+        "steamID64",
+        "Team",
+        "Role",
+        "Unit",
+        "Loadout",
+        "Kills",
+        "Score",
+        "Level",
+        "",
+    ]
+
+    test_keys = player_info.split("\n")
+    mandatory_keys: list[str] | None = None
+    if len(test_keys) == 9:
+        logger.debug(f"{len(test_keys)=}")
+        mandatory_keys = mandatory_keys_without_unit
+    elif len(test_keys) == 10:
+        logger.debug(f"{len(test_keys)=}")
+        mandatory_keys = mandatory_keys_with_unit
+    else:
+        logger.debug("Bailing early because player info is too short")
+        return False
+
+    for test_key, mandatory_key in zip(test_keys, mandatory_keys, strict=True):
+        if mandatory_key == "Name":
+            _, name = test_key.split("Name: ")
+            # Check to make sure the game server is returning info for the player we requested
+            if name != player_name:
+                logger.debug(
+                    f"Name did not match {test_key=} {mandatory_key=} {name=} {player_name=}"
+                )
+                raise ValueError(
+                    f"Game server returned get_player_info() for the wrong player"
+                )
+
+        if not test_key.startswith(mandatory_key):
+            logger.debug(f"{test_key=} {mandatory_key=}")
+            logger.debug(f"_validator_player_info({player_info!r}) incomplete ")
+            return False
+
+    return is_complete
 
 
 class HllConnection:
@@ -118,7 +181,10 @@ class HllConnection:
         await self.login()
 
     async def _receive_from_game_server(
-        self, max_bytes: int | None = constants.CHUNK_SIZE
+        self,
+        max_bytes: int | None = constants.CHUNK_SIZE,
+        validator: Callable | None = None,
+        **kwargs,
     ) -> bytes:
         """Accumulate chunks of bytes from the game server and return them
 
@@ -135,12 +201,26 @@ class HllConnection:
             try:
                 with trio.fail_after(self.receive_timeout):
                     buffer += await self.connection.receive_some(max_bytes)
+
+                    # The game server does not send back any sort of EOF marker
+                    # so there is no way to know when we're actually done, some
+                    # return values can be identified as complete and valid return
+                    # results, and if so we can return early, otherwise we block
+                    # until we time out
+                    if validator and validator(
+                        self.xor_decode(buffer, self.xor_key), **kwargs
+                    ):
+                        logger.debug(f"breaking on complete chunk")
+                        break
+
             except trio.TooSlowError:
                 break
 
         return bytes(buffer)
 
-    async def _send_to_game_server(self, content: str) -> str:
+    async def _send_to_game_server(
+        self, content: str, response_validator: Callable | None = None, **kwargs
+    ) -> str:
         """XOR the content and send to the game server, returning the game server response"""
         logger.debug(f"{len(content)=}")
         xored_content = HllConnection.xor_encode(content, self.xor_key)
@@ -149,7 +229,9 @@ class HllConnection:
         with trio.fail_after(self.tcp_timeout):
             logger.debug(f"sending content=`{content}`")
             await self.connection.send_all(xored_content)
-            result = await self._receive_from_game_server()
+            result = await self._receive_from_game_server(
+                validator=response_validator, **kwargs
+            )
 
         logger.warning(f"received {len(result)=} bytes")
 
@@ -462,7 +544,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"PlayerInfo {player_name}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, _validator_player_info, player_name=player_name
+        )
 
     async def add_vip(self, steam_id_64: str, name: str | None) -> str:
         """Grant VIP status to the given steam ID"""

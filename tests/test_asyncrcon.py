@@ -351,6 +351,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="Donny",
                 kick_type=constants.IDLE_KICK,
+                reason="YOU WERE KICKED FOR BEING IDLE",
                 time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
@@ -366,6 +367,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="dzkirandr",
                 kick_type=constants.HOST_CLOSED_CONNECTION_KICK,
+                reason="Host closed the connection.",
                 time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
@@ -381,6 +383,7 @@ def test_absolute_time_to_datetime(raw, expected):
             KickLogType(
                 player_name="Daxter L Miller",
                 kick_type=constants.TEAM_KILLING_KICK,
+                reason="KICKED FOR TEAM KILLING!",
                 time=LogTimeStampType(
                     absolute_timestamp=datetime(
                         year=2023, month=3, day=7, hour=3, minute=35, second=18
