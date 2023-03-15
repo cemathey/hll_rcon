@@ -20,6 +20,7 @@ TCP_TIMEOUT_READ: Final = 1
 TCP_TIMEOUT: Final = 25
 CHUNK_SIZE: Final = None
 
+EMPTY_RESPONSE: Final = "EMPTY"
 SUCCESS_RESPONSE = "SUCCESS"
 FAIL_RESPONSE = "FAIL"
 FAIL_MAP_REMOVAL_RESPONSE = "Requested map name was not found"
@@ -28,3 +29,11 @@ VALID_ADMIN_ROLES = ("owner", "senior", "junior", "spectator")
 
 HLL_BOOL_ENABLED = "on"
 HLL_BOOL_DISABLED = "off"
+
+INVALID_GAME_SERVER_RESPONSE_ERROR_MSG: Final = (
+    "Received an invalid response from the game server"
+)
+
+STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG: Final = (
+    "Must provide at least either a steam ID or player name"
+)

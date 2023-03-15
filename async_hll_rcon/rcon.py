@@ -3,6 +3,7 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import AsyncGenerator, Generator, Iterable
+from warnings import warn
 
 import trio
 from dateutil import parser
@@ -12,12 +13,14 @@ from async_hll_rcon import constants
 from async_hll_rcon.connection import HllConnection
 from async_hll_rcon.typedefs import (
     AdminCamLogType,
+    AdminIdType,
     AutoBalanceEnabledType,
     AutoBalanceThresholdType,
     BanLogType,
     ChatLogType,
     ConnectLogType,
     DisconnectLogType,
+    GameStateType,
     HighPingLimitType,
     IdleKickTimeType,
     IntegerGreaterOrEqualToOne,
@@ -31,10 +34,12 @@ from async_hll_rcon.typedefs import (
     PermanentBanType,
     PlayerInfoType,
     ScoreType,
+    ServerPlayerSlotsType,
     TeamKillLogType,
     TeamSwitchCoolDownType,
     TeamSwitchLogType,
     TemporaryBanType,
+    VipIdType,
     VoteKickEnabledType,
     VoteKickExpiredLogType,
     VoteKickPassedLogType,
@@ -107,6 +112,11 @@ class AsyncRcon:
         r"^\[([\d:.]+ (?:hours|min|sec|ms)) \((\d+)\)\]", re.MULTILINE
     )
 
+    # Miscellaneous parsing patterns
+    _gamestate_pattern = re.compile(
+        r"Players: Allied: (\d+) - Axis: (\d+)\nScore: Allied: (\d) - Axis: (\d)\nRemaining Time: (\d+):(\d+):(\d+)\nMap: (.*)\nNext Map:(.*)"
+    )
+
     def __init__(
         self,
         ip_addr: str,
@@ -131,9 +141,9 @@ class AsyncRcon:
         self.connection_limit = trio.CapacityLimiter(connection_pool_size)
 
     async def setup(self):
-        """Create `connection_pool_size` HllConnection instances"""
+        """Create and connect `connection_pool_size` HllConnection instances"""
 
-        async def _inner_setup():
+        async def _inner_setup() -> None:
             connection = await HllConnection.setup(
                 self._ip_addr,
                 self._port,
@@ -153,6 +163,10 @@ class AsyncRcon:
 
     @asynccontextmanager
     async def _get_connection(self) -> AsyncGenerator[HllConnection, None]:
+        """Dole out connections as they are available using a trio.CapacityLimiter
+
+        Will block until a connection is available if there are no free connections
+        """
         async with self.connection_limit:
             # in theory we never need to check for a connection being unavailable
             # because trio.CapacityLimiter should handle this for us and block if
@@ -163,10 +177,11 @@ class AsyncRcon:
 
     @staticmethod
     def to_hll_list(items: Iterable[str], separator: str = ",") -> str:
+        """Convert to a comma separated list for the game server"""
         return separator.join(items)
 
     @staticmethod
-    def from_hll_list(raw_list: str) -> list[str]:
+    def from_hll_list(raw_list: str, separator="\t") -> list[str]:
         """Convert a game server tab delimited result string to a native list
 
         Raises
@@ -175,9 +190,7 @@ class AsyncRcon:
                 return results with empty entries and others include trailing values so it is difficult
                 to definitively establish how many elements are in a list
         """
-        # raw_list = raw_list.strip()
-
-        expected_length, *items = raw_list.split("\t")
+        expected_length, *items = raw_list.split(separator)
         expected_length = int(expected_length)
 
         if len(items) < expected_length:
@@ -187,47 +200,98 @@ class AsyncRcon:
             if len(items) == 1 and not items[0]:
                 return []
 
-            if len(items) > 0 and items[0] and not items[-1]:
-                logger.debug(f"{items[:-1]=}")
-                return items[:-1]
-            raise ValueError("List does not match expected length")
+        if len(items) > 0 and items[0] and not items[-1]:
+            logger.debug(f"{items[:-1]=}")
+            return items[:-1]
+            # raise ValueError("List does not match expected length")
 
         return items
 
-    async def login(self):
-        async with self._get_connection() as conn:
-            result = await conn.login()
-            logger.debug(f"{id(self)} login {result=}")
+    # TODO: Remove this, it's not needed because the underlying connections handle logging in
+    # async def login(self):
+    #     async with self._get_connection() as conn:
+    #         result = await conn.login()
+    #         logger.debug(f"{id(self)} login {result=}")
 
-    async def get_server_name(self):
+    async def get_server_name(self) -> str:
+        """Return the server name as defined in the game server `Server.ini` file"""
         async with self._get_connection() as conn:
             result = await conn.get_server_name()
             logger.debug(
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_current_max_player_slots(self):
+        return result
+
+    async def get_current_max_player_slots(self) -> ServerPlayerSlotsType:
+        """Return the number of players currently on the server and max players"""
         async with self._get_connection() as conn:
             result = await conn.get_current_max_player_slots()
             logger.debug(
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_gamestate(self):
+        current_players, max_players = result.split("/")
+        return ServerPlayerSlotsType(
+            current_players=int(current_players), max_players=int(max_players)
+        )
+
+    @staticmethod
+    def parse_gamestate(raw_gamestate: str) -> GameStateType:
+        if match := re.match(AsyncRcon._gamestate_pattern, raw_gamestate):
+            (
+                allied_players,
+                axis_players,
+                allied_score,
+                axis_score,
+                hours,
+                mins,
+                secs,
+                current_map,
+                next_map,
+            ) = match.groups()
+            return GameStateType(
+                allied_players=int(allied_players),
+                axis_players=int(axis_players),
+                allied_score=int(allied_score),
+                axis_score=int(axis_score),
+                remaining_time=timedelta(
+                    hours=float(hours), minutes=float(mins), seconds=float(secs)
+                ),
+                current_map=current_map,
+                next_map=next_map,
+            )
+        else:
+            raise ValueError(
+                f"Game server returned invalid results for get_gamestate()"
+            )
+
+    async def get_gamestate(self) -> GameStateType:
+        """Return the current round state"""
         async with self._get_connection() as conn:
             result = await conn.get_gamestate()
             logger.debug(
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_max_queue_size(self):
+        return self.parse_gamestate(result)
+
+    async def get_max_queue_size(self) -> int:
+        """Return the maximum number of players allowed in the queue to join the server"""
         async with self._get_connection() as conn:
             result = await conn.get_max_queue_size()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
+        return int(result)
+
     async def set_max_queue_size(self, size: int) -> bool:
+        """Set the maximum number of players allowed in the queue to join the server (0 <= size <= 6)"""
+        if not 0 <= size <= 6:
+            warn(
+                "The game server does not support queue sizes outside of 0 <= size <= 6"
+            )
         async with self._get_connection() as conn:
             result = await conn.set_max_queue_size(size=size)
             logger.debug(
@@ -235,18 +299,27 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_num_vip_slots(self):
+    async def get_num_vip_slots(self) -> int:
+        """Returns the number of reserved VIP slots"""
         async with self._get_connection() as conn:
             result = await conn.get_num_vip_slots()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def set_num_vip_slots(self, amount: int):
+        return int(result)
+
+    async def set_num_vip_slots(self, amount: int) -> bool:
+        """Set the number of reserved VIP slots on the server
+
+        For example, setting this to 2 on a 100 slot server would only allow players
+        with VIP access to join once 98 players are connected (regardless of those
+        players VIP status)
+        """
         try:
             args = IntegerGreaterOrEqualToOne(value=amount)
         except ValueError as e:
@@ -259,14 +332,29 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def set_welcome_message(self, message: str):
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
+
+    async def set_welcome_message(self, message: str) -> bool:
+        """Set the server welcome message"""
         async with self._get_connection() as conn:
             result = await conn.set_welcome_message(message=message)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def set_broadcast_message(self, message: str | None):
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
+
+    async def set_broadcast_message(self, message: str | None) -> bool:
+        """Set the current broadcast message, or clear it if message is None
+
+        As of HLL v1.13.0.815373 resetting the broadcast message outside of the in game console is broken
+        """
         async with self._get_connection() as conn:
             result = await conn.set_broadcast_message(message=message)
             logger.debug(
@@ -274,11 +362,15 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def clear_broadcast_message(self):
+    async def clear_broadcast_message(self) -> bool:
+        """Clear the current broadcast message
+
+        As of HLL v1.13.0.815373 resetting the broadcast message outside of the in game console is broken
+        """
         async with self._get_connection() as conn:
             result = await conn.clear_broadcast_message()
             logger.debug(
@@ -286,12 +378,13 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
     @staticmethod
     def relative_time_to_timedelta(relative_time: str) -> timedelta:
+        """Convert a relative HLL game log timestamp to a timedelta"""
         raw_time, unit = relative_time.split(maxsplit=1)
 
         match unit:
@@ -314,6 +407,7 @@ class AsyncRcon:
 
     @staticmethod
     def absolute_time_to_datetime(absolute_time: str) -> datetime:
+        """Convert a Unix UTC timestamp to a native datetime"""
         # Game server time stamps are already UTC
         return datetime.utcfromtimestamp(float(absolute_time))
 
@@ -340,6 +434,7 @@ class AsyncRcon:
         | VoteKickExpiredLogType
         | None
     ):
+        """Parse a raw HLL game log instance to an aware pydantic.BaseModel type"""
         time = LogTimeStampType(
             absolute_timestamp=AsyncRcon.absolute_time_to_datetime(absolute_time),
             relative_timestamp=AsyncRcon.relative_time_to_timedelta(relative_time),
@@ -443,6 +538,7 @@ class AsyncRcon:
                         removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("KICKED FOR"):
                         removal_type = constants.TEAM_KILLING_KICK
+                        removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("KICKED BY THE"):
                         removal_type = constants.ADMIN_KICK
                         _, removal_reason = raw_removal_type.split("!", maxsplit=1)
@@ -606,7 +702,11 @@ class AsyncRcon:
     def split_raw_log_lines(
         raw_logs: str,
     ) -> Generator[tuple[str, str, str], None, None]:
-        """Split raw game server logs into the line, relative time and absolute UTC timestamp"""
+        """Split raw game server logs into the line, relative time and absolute UTC timestamp
+
+        Returns
+            A tuple of the actual log content, the relative time and timestamp as strings
+        """
         if raw_logs != "":
             logs = raw_logs.strip("\n")
             split_logs = re.split(AsyncRcon._log_split_pattern, logs)
@@ -624,14 +724,37 @@ class AsyncRcon:
             ):
                 yield raw_log_line.strip(), raw_relative_time, raw_timestamp,
 
-    async def get_game_logs(self, minutes: int, filter: str | None = None):
+    async def get_game_logs(
+        self, minutes: int, filter: str | None = None
+    ) -> list[
+        AdminCamLogType
+        | BanLogType
+        | ChatLogType
+        | ConnectLogType
+        | DisconnectLogType
+        | KickLogType
+        | KillLogType
+        | MatchEndLogType
+        | MatchStartLogType
+        | MessagedPlayerLogType
+        | TeamKillLogType
+        | TeamSwitchLogType
+        | VoteKickExpiredLogType
+        | VoteKickPassedLogType
+        | VoteKickPlayerVoteLogType
+        | VoteKickResultsLogType
+        | VoteKickStartedLogType
+        | None
+    ]:
+        """Split and parse raw game logs into aware pydantic.BaseModel types"""
         async with self._get_connection() as conn:
             result = await conn.get_game_logs(minutes=minutes, filter=filter)
+            # Incredibly spammy if enabled
             # logger.debug(
             #     f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             # )
 
-        if result == "EMPTY":
+        if result == constants.EMPTY_RESPONSE:
             return []
         else:
             logs = []
@@ -644,33 +767,44 @@ class AsyncRcon:
 
         return logs
 
-    async def get_current_map(self):
+    async def get_current_map(self) -> str:
+        """Return the current map name"""
         async with self._get_connection() as conn:
             result = await conn.get_current_map()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_available_maps(self):
+        # TODO: Add a map type
+        return result
+
+    async def get_available_maps(self) -> list[str]:
+        """Return a list of all available map names (not the current map rotation)."""
         async with self._get_connection() as conn:
             result = await conn.get_available_maps()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_map_rotation(self):
+        return self.from_hll_list(result)
+
+    async def get_map_rotation(self) -> list[str]:
+        """Return a list of the currently set map rotation names"""
         async with self._get_connection() as conn:
             result = await conn.get_map_rotation()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
+        return self.from_hll_list(result)
+
     async def add_map_to_rotation(
         self,
         name: str,
         after_map_name: str | None = None,
         after_map_ordinal: int | None = None,
-    ):
+    ) -> bool:
+        """Add the map to the rotation in the specified spot, appends to the end of the rotation by default"""
         async with self._get_connection() as conn:
             result = await conn.add_map_to_rotation(
                 name=name,
@@ -686,11 +820,14 @@ class AsyncRcon:
             constants.SUCCESS_RESPONSE,
             constants.FAIL_MAP_REMOVAL_RESPONSE,
         ):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def remove_map_from_rotation(self, name: str, ordinal: int | None = 1):
+    async def remove_map_from_rotation(
+        self, name: str, ordinal: int | None = 1
+    ) -> bool:
+        """Remove the specified map instance from the rotation"""
         async with self._get_connection() as conn:
             result = await conn.remove_map_from_rotation(name=name, ordinal=ordinal)
             logger.debug(
@@ -701,11 +838,12 @@ class AsyncRcon:
             constants.SUCCESS_RESPONSE,
             constants.FAIL_MAP_REMOVAL_RESPONSE,
         ):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
     async def set_current_map(self, name: str, ordinal: int | None = 1) -> bool:
+        """Immediately change the game server to the map after a 60 second delay, the map must be in the rotation"""
         async with self._get_connection() as conn:
             result = await conn.set_current_map(name=name, ordinal=ordinal)
             logger.debug(
@@ -713,79 +851,139 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_players(self):
+    async def get_players(self) -> list[str]:
+        """Return a list of player names currently connected to the game server"""
         async with self._get_connection() as conn:
             result = await conn.get_players()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_player_steam_ids(self):
-        # TODO: format result
+        list_result = AsyncRcon.from_hll_list(result)
+
+        # HLL likes to return the delimeter at the end of the last entry
+        # even though there isn't another result
+        if list_result[-1] == "":
+            return list_result[:-1]
+        else:
+            return list_result
+
+    @staticmethod
+    def parse_get_player_steam_ids(
+        name_and_ids: list[str],
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Parse name and steam ID pairs into dictionaries"""
+        steam_id_64_lookup: dict[str, str] = {}
+        player_name_lookup: dict[str, str] = {}
+
+        for pair in name_and_ids:
+            player_name, steam_id_64 = pair.split(" : ")
+            steam_id_64_lookup[steam_id_64] = player_name
+            player_name_lookup[player_name] = steam_id_64
+
+        return steam_id_64_lookup, player_name_lookup
+
+    async def get_player_steam_ids(self) -> tuple[dict[str, str], dict[str, str]]:
+        """Get the player names and steam IDs of all the players currently connected to the game server
+
+        Returns
+            A tuple of dictionaries, steam_id_64: player_name and player_name: steam_id_64
+        """
         async with self._get_connection() as conn:
             result = await conn.get_player_steam_ids()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-    async def get_admin_ids(self):
+        entries = self.from_hll_list(result)
+        return self.parse_get_player_steam_ids(entries)
+
+    @staticmethod
+    def parse_get_admin_ids(raw_admin_id: str) -> AdminIdType:
+        steam_id_64, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
+        return AdminIdType(steam_id_64=steam_id_64, role=role, name=quoted_name[1:-1])
+
+    async def get_admin_ids(self) -> list[AdminIdType]:
+        """Return each steam ID that has an admin role on the server, see also get_admin_groups()"""
         async with self._get_connection() as conn:
             result = await conn.get_admin_ids()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
+        admin_ids = self.from_hll_list(result)
+        return [self.parse_get_admin_ids(admin_id) for admin_id in admin_ids]
+
     async def get_admin_groups(self) -> list[str]:
+        """Return a list of available admin roles"""
         async with self._get_connection() as conn:
             result = await conn.get_admin_groups()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            groups = AsyncRcon.from_hll_list(result)
+        groups = AsyncRcon.from_hll_list(result)
 
-            if not all(group in constants.VALID_ADMIN_ROLES for group in groups):
-                raise ValueError(f"Received an invalid response from the game server")
+        if not all(group in constants.VALID_ADMIN_ROLES for group in groups):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
 
-            return groups
+        return groups
 
     async def add_admin(
         self, steam_id_64: str, role: str, name: str | None = None
     ) -> bool:
+        """Grant admin role access to a steam ID
+
+        Args
+            steam_id_64: A 17 digit steam ID
+            role: A valid HLL admin role, see get_admin_groups()
+            name: An optional display name, the game server will accept anything here
+                there is no necessary correlation to the names the steam ID plays with on the game server
+        """
         async with self._get_connection() as conn:
             result = await conn.add_admin(steam_id_64=steam_id_64, role=role, name=name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def remove_admin(self, steam_id_64: str):
+    async def remove_admin(self, steam_id_64: str) -> bool:
+        """Remove all admin roles from the specified steam ID, see get_admin_groups() for possible admin roles"""
         async with self._get_connection() as conn:
             result = await conn.remove_admin(steam_id_64=steam_id_64)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def get_vip_ids(self):
+    @staticmethod
+    def parse_get_vip_ids(vip_id: str) -> VipIdType:
+        steam_id_64, quoted_name = vip_id.split(" ", maxsplit=1)
+        return VipIdType(steam_id_64=steam_id_64, name=quoted_name[1:-1])
+
+    async def get_vip_ids(self) -> list[VipIdType]:
+        """Return a HLL tab delimited list of VIP steam ID 64s and names"""
         async with self._get_connection() as conn:
             result = await conn.get_vip_ids()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            return AsyncRcon.from_hll_list(result)
+
+        vip_ids = AsyncRcon.from_hll_list(result)
+
+        return [self.parse_get_vip_ids(vip_id) for vip_id in vip_ids]
 
     @staticmethod
     def parse_player_info(raw_player_info: str) -> PlayerInfoType:
@@ -833,16 +1031,27 @@ class AsyncRcon:
             level=int(level),
         )
 
-    async def get_player_info(self, player_name: str):
+    async def get_player_info(self, player_name: str) -> PlayerInfoType:
+        """Return detailed player info for the given player name"""
+        if not player_name:
+            raise ValueError("Must provide a player name")
+
         async with self._get_connection() as conn:
             result = await conn.get_player_info(player_name=player_name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return result
+        return self.parse_player_info(result)
 
     async def add_vip(self, steam_id_64: str, name: str | None):
+        """Grant VIP status to the given steam ID
+
+        Args
+            steam_id_64: A 17 digit steam ID
+            name: An optional display name, the game server will accept anything here
+                there is no necessary correlation to the names the steam ID plays with on the game server
+        """
         async with self._get_connection() as conn:
             result = await conn.add_vip(steam_id_64=steam_id_64, name=name)
             logger.debug(
@@ -850,11 +1059,12 @@ class AsyncRcon:
             )
 
             if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
+                raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
             else:
                 return result == constants.SUCCESS_RESPONSE
 
     async def remove_vip(self, steam_id_64: str):
+        """Remove VIP status from the given steam ID"""
         async with self._get_connection() as conn:
             result = await conn.remove_vip(steam_id_64=steam_id_64)
             logger.debug(
@@ -862,7 +1072,7 @@ class AsyncRcon:
             )
 
             if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
+                raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
             else:
                 return result == constants.SUCCESS_RESPONSE
 
@@ -875,9 +1085,14 @@ class AsyncRcon:
 
     @staticmethod
     def parse_temp_ban_log(raw_ban: str) -> TemporaryBanType | InvalidTempBanType:
-        """Parse a raw HLL ban log into a TempBanType dataclass
+        """Parse a raw HLL ban log into a TempBanType or InvalidTempBanType
 
-        76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
+        As of HLL v1.13.0.815373 under some (unknown) circumstances the game server will
+        return a temp ban log that includes neither the steam ID or player name:
+            ex: : banned for 46368 hours on 2023.02.20-17.47.55 for "Homophobic statements are not tolerated." by admin "-Scab"
+
+        Temporary ban logs are in the format:
+            76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
         """
         # TODO: Account for any other optional fields
         if match := re.match(AsyncRcon._temp_ban_log_pattern, raw_ban):
@@ -927,11 +1142,28 @@ class AsyncRcon:
 
         return ban
 
+    async def get_temp_bans(self) -> list[TemporaryBanType | InvalidTempBanType]:
+        """Return all the temporary bans on the game server"""
+        async with self._get_connection() as conn:
+            result = await conn.get_temp_bans()
+            logger.debug(
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+            )
+
+            raw_results = AsyncRcon.from_hll_list(result)
+
+            return [
+                AsyncRcon.parse_temp_ban_log(raw_ban)
+                for raw_ban in raw_results
+                if raw_ban
+            ]
+
     @staticmethod
     def parse_perma_ban_log(raw_ban: str) -> PermanentBanType:
-        """Parse a raw HLL ban log into a TempBanType dataclass
+        """Parse a raw HLL ban log
 
-        76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"
+        Permanent ban logs are in the format:
+            76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"
         """
         # TODO: Account for any other optional fields
         if match := re.match(AsyncRcon._perma_ban_log_pattern, raw_ban):
@@ -957,22 +1189,8 @@ class AsyncRcon:
 
         return ban
 
-    async def get_temp_bans(self) -> list[TemporaryBanType | InvalidTempBanType]:
-        async with self._get_connection() as conn:
-            result = await conn.get_temp_bans()
-            logger.debug(
-                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
-            )
-
-            raw_results = AsyncRcon.from_hll_list(result)
-
-            return [
-                AsyncRcon.parse_temp_ban_log(raw_ban)
-                for raw_ban in raw_results
-                if raw_ban
-            ]
-
     async def get_permanent_bans(self) -> list[PermanentBanType]:
+        """Return all the permanent bans on the game server"""
         async with self._get_connection() as conn:
             result = await conn.get_permanent_bans()
             logger.debug(
@@ -990,7 +1208,11 @@ class AsyncRcon:
         message: str,
         steam_id_64: str | None = None,
         player_name: str | None = None,
-    ):
+    ) -> bool:
+        """Send an in game message to the specified player"""
+        if steam_id_64 is None and player_name is None:
+            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
+
         async with self._get_connection() as conn:
             result = await conn.message_player(
                 message=message, steam_id_64=steam_id_64, player_name=player_name
@@ -999,58 +1221,62 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def punish_player(self, player_name: str, reason: str | None = None):
+    async def punish_player(self, player_name: str, reason: str | None = None) -> bool:
+        """Punish (kill in game) the specified player, will fail if they are not spawned"""
         async with self._get_connection() as conn:
             result = await conn.punish_player(player_name=player_name, reason=reason)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def switch_player_on_death(self, player_name: str):
+    async def switch_player_on_death(self, player_name: str) -> bool:
+        """Switch a player to the other team after their next death"""
         async with self._get_connection() as conn:
             result = await conn.switch_player_on_death(player_name=player_name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def switch_player_now(self, player_name: str):
+    async def switch_player_now(self, player_name: str) -> bool:
+        """Immediately switch a player to the other team"""
         async with self._get_connection() as conn:
             result = await conn.switch_player_now(player_name=player_name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def kick_player(self, player_name: str, reason: str | None = None):
+    async def kick_player(self, player_name: str, reason: str | None = None) -> bool:
+        """Remove a player from the server and show them the indicated reason"""
         async with self._get_connection() as conn:
             result = await conn.kick_player(player_name=player_name, reason=reason)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
     async def temp_ban_player(
         self,
@@ -1059,9 +1285,18 @@ class AsyncRcon:
         duration_hours: int | None = None,
         reason: str | None = None,
         by_admin_name: str | None = None,
-    ):
+    ) -> bool:
+        """Ban a player from the server for the given number of hours and show them the indicated reason
+
+        Args
+            steam_id_64: optional if player name is provided
+            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            duration_hours: number of hours to ban, will be cleared on game server restart, defaults to 2 if not provided
+            reason: optional reason for the ban that is shown to the player
+            by_admin_name: optional name for which admin or automated service banned the player
+        """
         if steam_id_64 is None and player_name is None:
-            raise ValueError(f"Must provide at least either a steam ID or player name")
+            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
 
         try:
             args = IntegerGreaterOrEqualToOne(value=duration_hours)
@@ -1080,10 +1315,10 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
     async def perma_ban_player(
         self,
@@ -1091,9 +1326,20 @@ class AsyncRcon:
         player_name: str | None = None,
         reason: str | None = None,
         by_admin_name: str | None = None,
-    ):
+    ) -> bool:
+        """Permanently ban a player and show them the indicated reason
+
+        Args
+            steam_id_64: optional if player name is provided
+            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            reason: optional reason for the ban that is shown to the player
+            by_admin_name: optional name for which admin or automated service banned the player
+
+        Returns
+            SUCCESS or FAIL
+        """
         if steam_id_64 is None and player_name is None:
-            raise ValueError(f"Must provide at least either a steam ID or player name")
+            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
 
         async with self._get_connection() as conn:
             result = await conn.perma_ban_player(
@@ -1106,12 +1352,18 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def remove_temp_ban(self, ban_log: str | TemporaryBanType):
+    async def remove_temp_ban(self, ban_log: str | TemporaryBanType) -> bool:
+        """Remove a temporary ban from a player
+
+        Args
+            ban_log: Must match the HLL ban log format returned from get_temp_bans
+        """
+
         # TODO: Handle invalid ban types?
         # if isinstance(ban_log, InvalidTempBanType):
         #     raise ValueError(f"Can'")
@@ -1127,12 +1379,18 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def remove_perma_ban(self, ban_log: str | PermanentBanType):
+    async def remove_perma_ban(self, ban_log: str | PermanentBanType) -> bool:
+        """Remove a permanent ban from a player
+
+        Args
+            ban_log: Must match the HLL ban log format returned from get_permanent_bans()
+        """
+
         # TODO: Handle invalid ban types?
         # if isinstance(ban_log, InvalidTempBanType):
         #     raise ValueError(f"Can'")
@@ -1148,21 +1406,23 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def get_idle_kick_time(self) -> IdleKickTimeType:
+    async def get_idle_kick_time(self) -> int:
+        """Return the current idle kick time in minutes"""
         async with self._get_connection() as conn:
             result = await conn.get_idle_kick_time()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            return IdleKickTimeType(kick_time=result)
+        return IdleKickTimeType(kick_time=result).kick_time
 
     async def set_idle_kick_time(self, threshold_minutes: int) -> bool:
+        """Set the idle kick time in minutes"""
         args = IdleKickTimeType(kick_time=threshold_minutes)
 
         async with self._get_connection() as conn:
@@ -1171,12 +1431,13 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-                raise ValueError(f"Received an invalid response from the game server")
-            else:
-                return result == constants.SUCCESS_RESPONSE
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def get_high_ping_limit(self):
+    async def get_high_ping_limit(self) -> int:
+        """Return the high ping limit (player is kicked when they exceed) in milliseconds"""
         async with self._get_connection() as conn:
             result = await conn.get_high_ping_limit()
             logger.debug(
@@ -1185,19 +1446,16 @@ class AsyncRcon:
 
         try:
             validated_result = HighPingLimitType(limit=result)
-        except ValueError as e:
+        except ValueError:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
             )
 
         return validated_result.limit
 
-    async def set_high_ping_limit(self, threshold: int):
-        try:
-            args = HighPingLimitType(limit=threshold)
-        except ValueError as e:
-            logger.error(f"{threshold=} must be an integer >= 0")
-            raise e
+    async def set_high_ping_limit(self, threshold: int) -> bool:
+        """Set the high ping limit (player is kicked when they exceed) in milliseconds"""
+        args = HighPingLimitType(limit=threshold)
 
         async with self._get_connection() as conn:
             result = await conn.set_high_ping_limit(threshold=args.limit)
@@ -1206,11 +1464,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def disable_high_ping_limit(self):
+    async def disable_high_ping_limit(self) -> bool:
+        """Disable (set to 0) the high ping limit"""
         async with self._get_connection() as conn:
             result = await conn.disable_high_ping_limit()
             logger.debug(
@@ -1218,11 +1477,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
     async def get_team_switch_cooldown(self) -> int:
+        """Return the current team switch cool down in minutes"""
         async with self._get_connection() as conn:
             result = await conn.get_team_switch_cooldown()
             logger.debug(
@@ -1238,7 +1498,8 @@ class AsyncRcon:
 
         return validated_result.cooldown
 
-    async def set_team_switch_cooldown(self, cooldown: int):
+    async def set_team_switch_cooldown(self, cooldown: int) -> bool:
+        """Set the team switch cool down in minutes"""
         try:
             args = TeamSwitchCoolDownType(cooldown=cooldown)
         except ValueError as e:
@@ -1252,11 +1513,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_auto_balance_enabled(self):
+    async def get_auto_balance_enabled(self) -> bool:
+        """Return if team auto balance (enforced differences in team sizes) is enabled"""
         async with self._get_connection() as conn:
             result = await conn.get_auto_balance_enabled()
             logger.debug(
@@ -1272,7 +1534,8 @@ class AsyncRcon:
 
         return validated_result.enabled
 
-    async def enable_auto_balance(self):
+    async def enable_auto_balance(self) -> bool:
+        """Enable the team auto balance (enforced differences in team sizes) feature"""
         async with self._get_connection() as conn:
             result = await conn.enable_auto_balance()
             logger.debug(
@@ -1280,11 +1543,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def disable_auto_balance(self):
+    async def disable_auto_balance(self) -> bool:
+        """Disable the team auto balance (enforced differences in team sizes) feature"""
         async with self._get_connection() as conn:
             result = await conn.disable_auto_balance()
             logger.debug(
@@ -1292,11 +1556,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_auto_balance_threshold(self):
+    async def get_auto_balance_threshold(self) -> int:
+        """Return the allowed team size difference before players are forced to join the other team"""
         async with self._get_connection() as conn:
             result = await conn.get_auto_balance_threshold()
             logger.debug(
@@ -1312,7 +1577,8 @@ class AsyncRcon:
 
         return validated_result.threshold
 
-    async def set_auto_balance_threshold(self, threshold: int):
+    async def set_auto_balance_threshold(self, threshold: int) -> bool:
+        """Set the allowed team size difference before players are forced to join the other team"""
         try:
             args = AutoBalanceThresholdType(threshold=threshold)
         except ValueError as e:
@@ -1326,11 +1592,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_vote_kick_enabled(self):
+    async def get_vote_kick_enabled(self) -> bool:
+        """Return if vote to kick players is enabled"""
         async with self._get_connection() as conn:
             result = await conn.get_vote_kick_enabled()
             logger.debug(
@@ -1346,7 +1613,8 @@ class AsyncRcon:
 
         return validated_result.enabled
 
-    async def enable_vote_kick(self):
+    async def enable_vote_kick(self) -> bool:
+        """Enable the vote to kick players feature"""
         async with self._get_connection() as conn:
             result = await conn.enable_vote_kick()
             logger.debug(
@@ -1354,11 +1622,12 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def disable_vote_kick(self):
+    async def disable_vote_kick(self) -> bool:
+        """Disable the vote to kick players feature"""
         async with self._get_connection() as conn:
             result = await conn.disable_vote_kick()
             logger.debug(
@@ -1366,38 +1635,41 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
+    @staticmethod
+    def parse_vote_kick_threshold(
+        raw_thresholds: str,
+    ) -> list[VoteKickThresholdType]:
+        values = raw_thresholds.split(",")
+        thresholds: list[VoteKickThresholdType] = []
+        for player, vote in zip(values[0::2], values[1::2]):
+            thresholds.append(
+                VoteKickThresholdType(player_count=player, votes_required=vote)  # type: ignore
+            )
+
+        return thresholds
+
     async def get_vote_kick_thresholds(self) -> list[VoteKickThresholdType]:
+        """Return the required number of votes to remove from the server in threshold pairs"""
         async with self._get_connection() as conn:
             result = await conn.get_vote_kick_thresholds()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        def parse_vote_kick_threshold(
-            raw_thresholds: str,
-        ) -> list[VoteKickThresholdType]:
-            values = raw_thresholds.split(",")
-            thresholds: list[VoteKickThresholdType] = []
-            for player, vote in zip(values[0::2], values[1::2]):
-                thresholds.append(
-                    VoteKickThresholdType(player_count=player, votes_required=vote)  # type: ignore
-                )
-
-            return thresholds
-
         try:
-            return parse_vote_kick_threshold(result)
+            return self.parse_vote_kick_threshold(result)
         except ValueError:
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
 
     @staticmethod
-    def convert_vote_kick_thresholds(
+    def _convert_vote_kick_thresholds(
         thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThresholdType] | str
     ) -> str:
+        # TODO: do more validation, check for negative player counts, votes, etc.
         if thresholds is None:
             raise ValueError(
                 "Vote kick thresholds must be pairs in the form (player count, votes required)"
@@ -1435,14 +1707,20 @@ class AsyncRcon:
 
         return ",".join(str(threshold) for threshold in raw_thresholds)
 
-    async def set_vote_kick_threshold(
+    async def set_vote_kick_thresholds(
         self,
         thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThresholdType] | str,
-    ):
-        processed_thresholds = self.convert_vote_kick_thresholds(thresholds)
+    ) -> bool:
+        """Set vote kick threshold pairs, the first entry must be for 0 players
+
+        Args
+            threshold_pairs: A comma separated list in the form: players, votes required for instance 0,1,10,5
+                means when 10 players are on, 5 votes are required to remove a player or a list of VoteKickThresholdType
+        """
+        validated_thresholds = self._convert_vote_kick_thresholds(thresholds)
         async with self._get_connection() as conn:
-            result = await conn.set_vote_kick_threshold(
-                threshold_pairs=processed_thresholds
+            result = await conn.set_vote_kick_thresholds(
+                threshold_pairs=validated_thresholds
             )
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
@@ -1450,11 +1728,15 @@ class AsyncRcon:
 
         # TODO: report error message from the game server
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def clear_vote_kick_threshold(self):
+    async def clear_vote_kick_threshold(self) -> bool:
+        """Clear vote kick threshold pairs
+
+        Removes all the threshold pairs, the game server does not appear to have defaults
+        """
         async with self._get_connection() as conn:
             result = await conn.clear_vote_kick_threshold()
             logger.debug(
@@ -1462,19 +1744,21 @@ class AsyncRcon:
             )
 
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
-            raise ValueError(f"Received an invalid response from the game server")
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             return result == constants.SUCCESS_RESPONSE
 
-    async def get_censored_words(self):
+    async def get_censored_words(self) -> list[str]:
+        """Return a list of all words that will be censored in game chat"""
         async with self._get_connection() as conn:
             result = await conn.get_censored_words()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            return AsyncRcon.from_hll_list(result)
 
-    async def censor_words(self, words: Iterable[str]):
+        return AsyncRcon.from_hll_list(result)
+
+    async def censor_words(self, words: Iterable[str]) -> bool:
         raw_words = AsyncRcon.to_hll_list(words)
         async with self._get_connection() as conn:
             result = await conn.censor_words(words=raw_words)
@@ -1482,9 +1766,12 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return result
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE
 
-    async def uncensor_words(self, words: Iterable[str]):
+    async def uncensor_words(self, words: Iterable[str]) -> bool:
         raw_words = AsyncRcon.to_hll_list(words)
         async with self._get_connection() as conn:
             result = await conn.uncensor_words(words=raw_words)
@@ -1492,4 +1779,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return result
+        if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
+        else:
+            return result == constants.SUCCESS_RESPONSE

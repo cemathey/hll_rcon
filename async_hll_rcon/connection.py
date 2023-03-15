@@ -366,7 +366,7 @@ class HllConnection:
         return await self.set_broadcast_message(None)
 
     async def get_game_logs(self, minutes: int, filter: str | None = None) -> str:
-        """
+        """Return a new line delimited list of game logs
 
         Args
             minutes: The number of minutes worth of logs to return, it is not possible to retrieve
@@ -394,7 +394,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def get_available_maps(self) -> str:
-        """Return a HLL tab delimited list of all map names."""
+        """Return a HLL tab delimited list of all available map names."""
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
@@ -402,7 +402,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def get_map_rotation(self) -> str:
-        """Return a newline delimited string of the current map rotation names"""
+        """Return a newline delimited string of the currently set map rotation names"""
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
@@ -415,7 +415,7 @@ class HllConnection:
         after_map_name: str | None = None,
         after_map_ordinal: int | None = None,
     ) -> str:
-        """Add the map to the rotation in the specified spot
+        """Add the map to the rotation in the specified spot, appends to the end of the rotation by default
 
         Returns
             SUCCESS or game server error messages
@@ -439,7 +439,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def set_current_map(self, name: str, ordinal: int | None = 1) -> str:
-        """Change the game server to the map after a 60 second delay, the map must be in the rotation
+        """Immediately change the game server to the map after a 60 second delay, the map must be in the rotation
 
         Returns
             SUCCESS or FAIL
@@ -502,9 +502,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def remove_admin(self, steam_id_64: str) -> str:
-        """Remove all admin roles from the specified steam ID
-
-        see get_admin_groups() for possible admin roles
+        """Remove all admin roles from the specified steam ID, see get_admin_groups() for possible admin roles
 
         Returns
             SUCCESS or FAIL
@@ -634,7 +632,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def kick_player(self, player_name: str, reason: str | None = None) -> str:
-        """Kick a player from the server and show them the indicated reason
+        """Remove a player from the server and show them the indicated reason
 
         Returns
             SUCCESS or FAIL
@@ -833,7 +831,7 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def disable_auto_balance(self) -> str:
-        """Enable the team auto balance (enforced differences in team sizes) feature
+        """Disable the team auto balance (enforced differences in team sizes) feature
 
         Returns
             SUCCESS or FAIL
@@ -914,7 +912,7 @@ class HllConnection:
         content = f"Get VoteKickThreshold"
         return await self._send_to_game_server(content)
 
-    async def set_vote_kick_threshold(self, threshold_pairs: str) -> str:
+    async def set_vote_kick_thresholds(self, threshold_pairs: str) -> str:
         """Set vote kick threshold pairs, the first entry must be for 0 players
 
         Args

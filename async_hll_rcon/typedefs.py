@@ -123,6 +123,32 @@ class IdleKickTimeType(pydantic.BaseModel):
     kick_time: pydantic.conint(ge=0)  # type: ignore
 
 
+class ServerPlayerSlotsType(pydantic.BaseModel):
+    current_players: int
+    max_players: int
+
+
+class GameStateType(pydantic.BaseModel):
+    allied_players: int
+    axis_players: int
+    allied_score: int
+    axis_score: int
+    remaining_time: timedelta
+    current_map: str
+    next_map: str
+
+
+class AdminIdType(pydantic.BaseModel):
+    steam_id_64: str
+    role: str
+    name: str
+
+
+class VipIdType(pydantic.BaseModel):
+    steam_id_64: str
+    name: str
+
+
 class ScoreType(pydantic.BaseModel):
     kills: int
     deaths: int

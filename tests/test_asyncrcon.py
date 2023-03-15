@@ -139,7 +139,7 @@ def test_perma_ban_parsing(raw, expected):
     "raw, expected", [("1,2,3,4", "1,2,3,4"), ([(0, 1), (2, 3)], "0,1,2,3")]
 )
 def test_convert_vote_kick_thresholds(raw, expected):
-    assert AsyncRcon.convert_vote_kick_thresholds(raw) == expected
+    assert AsyncRcon._convert_vote_kick_thresholds(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -148,7 +148,7 @@ def test_convert_vote_kick_thresholds(raw, expected):
 )
 def test_convert_vote_kick_thresholds_exceptions(raw, expected):
     with pytest.raises(expected):
-        AsyncRcon.convert_vote_kick_thresholds(raw)
+        AsyncRcon._convert_vote_kick_thresholds(raw)
 
 
 @pytest.mark.parametrize(
