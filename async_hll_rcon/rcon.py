@@ -140,7 +140,7 @@ class AsyncRcon:
         self.connection_pool_size = connection_pool_size
         self.connection_limit = trio.CapacityLimiter(connection_pool_size)
 
-    async def setup(self):
+    async def setup(self) -> None:
         """Create and connect `connection_pool_size` HllConnection instances"""
 
         async def _inner_setup() -> None:
@@ -176,12 +176,12 @@ class AsyncRcon:
             self.connections.append(connection)
 
     @staticmethod
-    def to_hll_list(items: Iterable[str], separator: str = ",") -> str:
+    def _to_hll_list(items: Iterable[str], separator: str = ",") -> str:
         """Convert to a comma separated list for the game server"""
         return separator.join(items)
 
     @staticmethod
-    def from_hll_list(raw_list: str, separator="\t") -> list[str]:
+    def _from_hll_list(raw_list: str, separator="\t") -> list[str]:
         """Convert a game server tab delimited result string to a native list
 
         Raises
@@ -207,12 +207,6 @@ class AsyncRcon:
 
         return items
 
-    # TODO: Remove this, it's not needed because the underlying connections handle logging in
-    # async def login(self):
-    #     async with self._get_connection() as conn:
-    #         result = await conn.login()
-    #         logger.debug(f"{id(self)} login {result=}")
-
     async def get_server_name(self) -> str:
         """Return the server name as defined in the game server `Server.ini` file"""
         async with self._get_connection() as conn:
@@ -223,6 +217,13 @@ class AsyncRcon:
 
         return result
 
+    @staticmethod
+    def _parse_get_current_max_player_slots(slots: str) -> ServerPlayerSlotsType:
+        current_players, max_players = slots.split("/")
+        return ServerPlayerSlotsType(
+            current_players=int(current_players), max_players=int(max_players)
+        )
+
     async def get_current_max_player_slots(self) -> ServerPlayerSlotsType:
         """Return the number of players currently on the server and max players"""
         async with self._get_connection() as conn:
@@ -231,13 +232,10 @@ class AsyncRcon:
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        current_players, max_players = result.split("/")
-        return ServerPlayerSlotsType(
-            current_players=int(current_players), max_players=int(max_players)
-        )
+        return self._parse_get_current_max_player_slots(result)
 
     @staticmethod
-    def parse_gamestate(raw_gamestate: str) -> GameStateType:
+    def _parse_gamestate(raw_gamestate: str) -> GameStateType:
         if match := re.match(AsyncRcon._gamestate_pattern, raw_gamestate):
             (
                 allied_players,
@@ -274,7 +272,7 @@ class AsyncRcon:
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return self.parse_gamestate(result)
+        return self._parse_gamestate(result)
 
     async def get_max_queue_size(self) -> int:
         """Return the maximum number of players allowed in the queue to join the server"""
@@ -383,7 +381,7 @@ class AsyncRcon:
             return result == constants.SUCCESS_RESPONSE
 
     @staticmethod
-    def relative_time_to_timedelta(relative_time: str) -> timedelta:
+    def _relative_time_to_timedelta(relative_time: str) -> timedelta:
         """Convert a relative HLL game log timestamp to a timedelta"""
         raw_time, unit = relative_time.split(maxsplit=1)
 
@@ -406,38 +404,38 @@ class AsyncRcon:
                 raise ValueError(f"Unable to parse relative time=`{relative_time}`")
 
     @staticmethod
-    def absolute_time_to_datetime(absolute_time: str) -> datetime:
+    def _absolute_time_to_datetime(absolute_time: str) -> datetime:
         """Convert a Unix UTC timestamp to a native datetime"""
         # Game server time stamps are already UTC
         return datetime.utcfromtimestamp(float(absolute_time))
 
     @staticmethod
-    def parse_game_log(
+    def _parse_game_log(
         raw_log: str, relative_time: str, absolute_time: str
     ) -> (
-        KillLogType
-        | TeamKillLogType
+        AdminCamLogType
+        | BanLogType
         | ChatLogType
         | ConnectLogType
         | DisconnectLogType
-        | TeamSwitchLogType
         | KickLogType
-        | BanLogType
-        | MatchStartLogType
+        | KillLogType
         | MatchEndLogType
-        | AdminCamLogType
-        | VoteKickPlayerVoteLogType
-        | VoteKickPassedLogType
-        | VoteKickStartedLogType
-        | VoteKickResultsLogType
+        | MatchStartLogType
         | MessagedPlayerLogType
+        | TeamKillLogType
+        | TeamSwitchLogType
         | VoteKickExpiredLogType
+        | VoteKickPassedLogType
+        | VoteKickPlayerVoteLogType
+        | VoteKickResultsLogType
+        | VoteKickStartedLogType
         | None
     ):
         """Parse a raw HLL game log instance to an aware pydantic.BaseModel type"""
         time = LogTimeStampType(
-            absolute_timestamp=AsyncRcon.absolute_time_to_datetime(absolute_time),
-            relative_timestamp=AsyncRcon.relative_time_to_timedelta(relative_time),
+            absolute_timestamp=AsyncRcon._absolute_time_to_datetime(absolute_time),
+            relative_timestamp=AsyncRcon._relative_time_to_timedelta(relative_time),
         )
 
         if raw_log.startswith("KILL") or raw_log.startswith("TEAM KILL"):
@@ -704,7 +702,7 @@ class AsyncRcon:
     ) -> Generator[tuple[str, str, str], None, None]:
         """Split raw game server logs into the line, relative time and absolute UTC timestamp
 
-        Returns
+        Yields
             A tuple of the actual log content, the relative time and timestamp as strings
         """
         if raw_logs != "":
@@ -762,7 +760,7 @@ class AsyncRcon:
                 result
             ):
                 logs.append(
-                    AsyncRcon.parse_game_log(raw_log, relative_time, absolute_time)
+                    AsyncRcon._parse_game_log(raw_log, relative_time, absolute_time)
                 )
 
         return logs
@@ -786,7 +784,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return self.from_hll_list(result)
+        return self._from_hll_list(result)
 
     async def get_map_rotation(self) -> list[str]:
         """Return a list of the currently set map rotation names"""
@@ -796,7 +794,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return self.from_hll_list(result)
+        return self._from_hll_list(result)
 
     async def add_map_to_rotation(
         self,
@@ -863,7 +861,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        list_result = AsyncRcon.from_hll_list(result)
+        list_result = AsyncRcon._from_hll_list(result)
 
         # HLL likes to return the delimeter at the end of the last entry
         # even though there isn't another result
@@ -873,7 +871,7 @@ class AsyncRcon:
             return list_result
 
     @staticmethod
-    def parse_get_player_steam_ids(
+    def _parse_get_player_steam_ids(
         name_and_ids: list[str],
     ) -> tuple[dict[str, str], dict[str, str]]:
         """Parse name and steam ID pairs into dictionaries"""
@@ -899,11 +897,11 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        entries = self.from_hll_list(result)
-        return self.parse_get_player_steam_ids(entries)
+        entries = self._from_hll_list(result)
+        return self._parse_get_player_steam_ids(entries)
 
     @staticmethod
-    def parse_get_admin_ids(raw_admin_id: str) -> AdminIdType:
+    def _parse_get_admin_ids(raw_admin_id: str) -> AdminIdType:
         steam_id_64, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
         return AdminIdType(steam_id_64=steam_id_64, role=role, name=quoted_name[1:-1])
 
@@ -915,8 +913,8 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        admin_ids = self.from_hll_list(result)
-        return [self.parse_get_admin_ids(admin_id) for admin_id in admin_ids]
+        admin_ids = self._from_hll_list(result)
+        return [self._parse_get_admin_ids(admin_id) for admin_id in admin_ids]
 
     async def get_admin_groups(self) -> list[str]:
         """Return a list of available admin roles"""
@@ -926,7 +924,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        groups = AsyncRcon.from_hll_list(result)
+        groups = AsyncRcon._from_hll_list(result)
 
         if not all(group in constants.VALID_ADMIN_ROLES for group in groups):
             raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
@@ -969,7 +967,7 @@ class AsyncRcon:
             return result == constants.SUCCESS_RESPONSE
 
     @staticmethod
-    def parse_get_vip_ids(vip_id: str) -> VipIdType:
+    def _parse_get_vip_ids(vip_id: str) -> VipIdType:
         steam_id_64, quoted_name = vip_id.split(" ", maxsplit=1)
         return VipIdType(steam_id_64=steam_id_64, name=quoted_name[1:-1])
 
@@ -981,12 +979,12 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        vip_ids = AsyncRcon.from_hll_list(result)
+        vip_ids = AsyncRcon._from_hll_list(result)
 
-        return [self.parse_get_vip_ids(vip_id) for vip_id in vip_ids]
+        return [self._parse_get_vip_ids(vip_id) for vip_id in vip_ids]
 
     @staticmethod
-    def parse_player_info(raw_player_info: str) -> PlayerInfoType:
+    def _parse_player_info(raw_player_info: str) -> PlayerInfoType:
         lines = raw_player_info.strip().split("\n")
         if len(lines) != 7:
             raise ValueError(
@@ -1042,7 +1040,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return self.parse_player_info(result)
+        return self._parse_player_info(result)
 
     async def add_vip(self, steam_id_64: str, name: str | None):
         """Grant VIP status to the given steam ID
@@ -1077,14 +1075,14 @@ class AsyncRcon:
                 return result == constants.SUCCESS_RESPONSE
 
     @staticmethod
-    def parse_ban_log_timestamp(raw_timestamp: str) -> datetime:
+    def _parse_ban_log_timestamp(raw_timestamp: str) -> datetime:
         _date, _time = raw_timestamp.split("-")
         _time = _time.replace(".", ":")
 
         return parser.parse(f"{_date} {_time}")
 
     @staticmethod
-    def parse_temp_ban_log(raw_ban: str) -> TemporaryBanType | InvalidTempBanType:
+    def _parse_temp_ban_log(raw_ban: str) -> TemporaryBanType | InvalidTempBanType:
         """Parse a raw HLL ban log into a TempBanType or InvalidTempBanType
 
         As of HLL v1.13.0.815373 under some (unknown) circumstances the game server will
@@ -1105,7 +1103,7 @@ class AsyncRcon:
                 admin,
             ) = match.groups()
 
-            timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
+            timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
             ban = TemporaryBanType(
                 steam_id_64=steam_id_64,
@@ -1127,7 +1125,7 @@ class AsyncRcon:
                 admin,
             ) = match.groups()
 
-            timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
+            timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
             ban = InvalidTempBanType(
                 steam_id_64=steam_id_64,
@@ -1150,16 +1148,16 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-            raw_results = AsyncRcon.from_hll_list(result)
+            raw_results = AsyncRcon._from_hll_list(result)
 
             return [
-                AsyncRcon.parse_temp_ban_log(raw_ban)
+                AsyncRcon._parse_temp_ban_log(raw_ban)
                 for raw_ban in raw_results
                 if raw_ban
             ]
 
     @staticmethod
-    def parse_perma_ban_log(raw_ban: str) -> PermanentBanType:
+    def _parse_perma_ban_log(raw_ban: str) -> PermanentBanType:
         """Parse a raw HLL ban log
 
         Permanent ban logs are in the format:
@@ -1175,7 +1173,7 @@ class AsyncRcon:
                 admin,
             ) = match.groups()
 
-            timestamp = AsyncRcon.parse_ban_log_timestamp(raw_timestamp)
+            timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
             ban = PermanentBanType(
                 steam_id_64=steam_id_64,
@@ -1196,9 +1194,9 @@ class AsyncRcon:
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-            raw_results = AsyncRcon.from_hll_list(result)
+            raw_results = AsyncRcon._from_hll_list(result)
             return [
-                AsyncRcon.parse_perma_ban_log(raw_ban)
+                AsyncRcon._parse_perma_ban_log(raw_ban)
                 for raw_ban in raw_results
                 if raw_ban
             ]
@@ -1369,7 +1367,7 @@ class AsyncRcon:
         #     raise ValueError(f"Can'")
 
         if isinstance(ban_log, str):
-            self.parse_temp_ban_log(ban_log)
+            self._parse_temp_ban_log(ban_log)
         else:
             ban_log = str(ban_log)
 
@@ -1391,12 +1389,8 @@ class AsyncRcon:
             ban_log: Must match the HLL ban log format returned from get_permanent_bans()
         """
 
-        # TODO: Handle invalid ban types?
-        # if isinstance(ban_log, InvalidTempBanType):
-        #     raise ValueError(f"Can'")
-
         if isinstance(ban_log, str):
-            self.parse_perma_ban_log(ban_log)
+            self._parse_perma_ban_log(ban_log)
         else:
             ban_log = str(ban_log)
 
@@ -1640,7 +1634,7 @@ class AsyncRcon:
             return result == constants.SUCCESS_RESPONSE
 
     @staticmethod
-    def parse_vote_kick_threshold(
+    def _parse_vote_kick_threshold(
         raw_thresholds: str,
     ) -> list[VoteKickThresholdType]:
         values = raw_thresholds.split(",")
@@ -1661,7 +1655,7 @@ class AsyncRcon:
             )
 
         try:
-            return self.parse_vote_kick_threshold(result)
+            return self._parse_vote_kick_threshold(result)
         except ValueError:
             raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
 
@@ -1756,10 +1750,11 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        return AsyncRcon.from_hll_list(result)
+        return AsyncRcon._from_hll_list(result)
 
     async def censor_words(self, words: Iterable[str]) -> bool:
-        raw_words = AsyncRcon.to_hll_list(words)
+        """Add words to the list of words censored in game chat"""
+        raw_words = AsyncRcon._to_hll_list(words)
         async with self._get_connection() as conn:
             result = await conn.censor_words(words=raw_words)
             logger.debug(
@@ -1772,7 +1767,8 @@ class AsyncRcon:
             return result == constants.SUCCESS_RESPONSE
 
     async def uncensor_words(self, words: Iterable[str]) -> bool:
-        raw_words = AsyncRcon.to_hll_list(words)
+        """Remove words from the list of words censored in game chat"""
+        raw_words = AsyncRcon._to_hll_list(words)
         async with self._get_connection() as conn:
             result = await conn.uncensor_words(words=raw_words)
             logger.debug(

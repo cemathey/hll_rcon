@@ -72,7 +72,11 @@ def _validator_player_info(player_info: str, player_name: str | None = None) -> 
 
 
 class HllConnection:
-    """Represents an underlying low level socket connection to the game server and returns raw results"""
+    """Represents an underlying low level socket connection to the game server and returns raw results
+
+    Performs minmal to no validation/error checking because all of that is done in AsyncRcon
+
+    """
 
     def __init__(
         self,
@@ -182,7 +186,8 @@ class HllConnection:
 
     async def _receive_from_game_server(
         self,
-        max_bytes: int | None = constants.CHUNK_SIZE,
+        max_bytes: int
+        | None = constants.CHUNK_SIZE,  # TODO allow configuration for this
         validator: Callable | None = None,
         **kwargs,
     ) -> bytes:
@@ -194,8 +199,6 @@ class HllConnection:
         seconds and then return all the accumulated data
         """
 
-        # TODO: We really need a better way to do this to account for slower connections
-        # without also blocking when there's no content to receive
         buffer = bytearray()
         while True:
             try:
@@ -237,8 +240,8 @@ class HllConnection:
 
         return HllConnection.xor_decode(result, self.xor_key)
 
-    async def login(self):
-        """Log into the game server
+    async def login(self) -> str:
+        """Log into the game server with the ip/port/password provided during initialization
 
         Returns:
             "SUCCESS" or "FAILURE"

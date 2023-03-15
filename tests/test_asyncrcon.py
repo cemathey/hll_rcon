@@ -51,7 +51,7 @@ def test_xor_decode(cipher_text, xor_key, expected):
     ],
 )
 def test_list_conversion(raw, expected):
-    assert AsyncRcon.from_hll_list(raw) == expected
+    assert AsyncRcon._from_hll_list(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ def test_list_conversion(raw, expected):
     ],
 )
 def test_ban_list_timestamp_conversion(raw, expected):
-    assert AsyncRcon.parse_ban_log_timestamp(raw) == expected
+    assert AsyncRcon._parse_ban_log_timestamp(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -99,7 +99,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
     ],
 )
 def test_temp_ban_parsing(raw, expected):
-    assert AsyncRcon.parse_temp_ban_log(raw) == expected
+    assert AsyncRcon._parse_temp_ban_log(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -132,7 +132,7 @@ def test_temp_ban_parsing(raw, expected):
     ],
 )
 def test_perma_ban_parsing(raw, expected):
-    assert AsyncRcon.parse_perma_ban_log(raw) == expected
+    assert AsyncRcon._parse_perma_ban_log(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -177,7 +177,7 @@ Level: 238
     ],
 )
 def test_parse_player_info(raw, expected):
-    assert AsyncRcon.parse_player_info(raw) == expected
+    assert AsyncRcon._parse_player_info(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -190,7 +190,7 @@ def test_parse_player_info(raw, expected):
     ],
 )
 def test_relative_time_to_timedelta(raw, expected):
-    assert AsyncRcon.relative_time_to_timedelta(raw) == expected
+    assert AsyncRcon._relative_time_to_timedelta(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -198,7 +198,7 @@ def test_relative_time_to_timedelta(raw, expected):
     [("1678156382", datetime(year=2023, month=3, day=7, hour=2, minute=33, second=2))],
 )
 def test_absolute_time_to_datetime(raw, expected):
-    assert AsyncRcon.absolute_time_to_datetime(raw) == expected
+    assert AsyncRcon._absolute_time_to_datetime(raw) == expected
 
 
 @pytest.mark.parametrize(
@@ -427,4 +427,4 @@ def test_absolute_time_to_datetime(raw, expected):
     ],
 )
 def test_parse_game_log(raw_log, relative_time, absolute_time, expected):
-    assert AsyncRcon.parse_game_log(raw_log, relative_time, absolute_time) == expected
+    assert AsyncRcon._parse_game_log(raw_log, relative_time, absolute_time) == expected
