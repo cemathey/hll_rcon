@@ -8,7 +8,12 @@ from loguru import logger
 
 from async_hll_rcon import constants
 from async_hll_rcon.typedefs import FailedGameServerCommand, FailedGameServerResponse
-from async_hll_rcon.validators import _validator_player_info
+from async_hll_rcon.validators import (
+    _gamestate_validator,
+    _on_off_validator,
+    _player_info_validator,
+    _success_fail_validator,
+)
 
 
 class HllConnection:
@@ -210,7 +215,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Login {self.password}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_server_name(self) -> str:
         """Return the server name as defined in the game server `Server.ini` file"""
@@ -245,7 +252,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Get GameState"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_gamestate_validator
+        )
 
     async def get_max_queue_size(self) -> str:
         """Return the maximum number of players allowed in the queue to join the server"""
@@ -265,7 +274,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetMaxQueuedPlayers {size}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_num_vip_slots(self) -> str:
         """Returns the number of reserved VIP slots"""
@@ -289,7 +300,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({amount=})"  # type: ignore
         )
         content = f"SetNumVipSlots {amount}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def set_welcome_message(self, message: str) -> str:
         """Set the server welcome message
@@ -301,7 +314,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({message=})"  # type: ignore
         )
         content = f"Say {message}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def set_broadcast_message(self, message: str | None) -> str:
         """Set the current broadcast message, or clear it if message is None
@@ -318,7 +333,9 @@ class HllConnection:
             content = f"Broadcast  "
 
         logger.debug(f"{content=}")
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def clear_broadcast_message(self) -> str:
         """Clear the current broadcast message
@@ -411,7 +428,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Map {name} {ordinal or ''}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_players(self) -> str:
         """Return a HLL tab delimited list of player names currently connected to the game server"""
@@ -457,12 +476,17 @@ class HllConnection:
         """Grant the specified steam ID the specified role
 
         Role must be valid, see get_admin_groups()
+
+        Returns
+            SUCCESS or FAIL
         """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"AdminAdd {steam_id_64} {role} {name or ''}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def remove_admin(self, steam_id_64: str) -> str:
         """Remove all admin roles from the specified steam ID, see get_admin_groups() for possible admin roles
@@ -474,7 +498,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"AdminDel {steam_id_64}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_vip_ids(self) -> str:
         """Return a HLL tab delimited list of VIP steam ID 64s and names"""
@@ -506,27 +532,39 @@ class HllConnection:
         )
         content = f"PlayerInfo {player_name}"
         result = await self._send_to_game_server(
-            content, _validator_player_info, player_name=player_name, conn_id=id(self)
+            content, _player_info_validator, player_name=player_name, conn_id=id(self)
         )
 
         logger.debug(f"{id(self)} {result=}")
         return result
 
     async def add_vip(self, steam_id_64: str, name: str | None) -> str:
-        """Grant VIP status to the given steam ID"""
+        """Grant VIP status to the given steam ID
+
+        Returns
+            SUCCESS or FAIL
+        """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"VipAdd {steam_id_64} {name}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def remove_vip(self, steam_id_64: str) -> str:
-        """Remove VIP status from the given steam ID"""
+        """Remove VIP status from the given steam ID
+
+        Returns
+            SUCCESS or FAIL
+        """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"VipDel {steam_id_64}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_temp_bans(self) -> str:
         """Return a HLL tab delimited list of temporary ban lists"""
@@ -559,7 +597,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f'Message "{steam_id_64 or player_name}" "{message}"'
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def punish_player(self, player_name: str, reason: str | None = None) -> str:
         """Punish (kill in game) the specified player, will fail if they are not spawned
@@ -571,7 +611,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Punish {player_name} {reason}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def switch_player_on_death(self, player_name: str) -> str:
         """Switch a player to the other team after their next death
@@ -583,7 +625,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SwitchTeamOnDeath {player_name}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def switch_player_now(self, player_name: str) -> str:
         """Immediately switch a player to the other team
@@ -595,7 +639,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SwitchTeamNow {player_name}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def kick_player(self, player_name: str, reason: str | None = None) -> str:
         """Remove a player from the server and show them the indicated reason
@@ -607,7 +653,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Kick {player_name} {reason}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def temp_ban_player(
         self,
@@ -644,7 +692,9 @@ class HllConnection:
             by_admin_name = ""
 
         content = f'TempBan "{steam_id_64 or player_name}" {validated_duration} "{reason}" "{by_admin_name}"'
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def perma_ban_player(
         self,
@@ -677,7 +727,9 @@ class HllConnection:
         content = (
             f'PermaBan "{steam_id_64 or player_name}" "{reason}" "{by_admin_name}"'
         )
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def remove_temp_ban(self, ban_log: str) -> str:
         """Remove a temporary ban from a player
@@ -692,7 +744,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"PardonTempBan {ban_log}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def remove_perma_ban(self, ban_log: str) -> str:
         """Remove a permanent ban from a player
@@ -707,7 +761,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"PardonPermaBan {ban_log}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_idle_kick_time(self) -> str:
         """Return the current idle kick time in minutes"""
@@ -727,7 +783,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetKickIdleTime {threshold_minutes}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_high_ping_limit(self) -> str:
         """Return the high ping limit in milliseconds"""
@@ -738,15 +796,25 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def set_high_ping_limit(self, threshold: int) -> str:
-        """Set the high ping limit (player is kicked when they exceed) in milliseconds"""
+        """Set the high ping limit (player is kicked when they exceed) in milliseconds
+
+        Returns
+            SUCCESS or FAIL
+        """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetHighPing {threshold}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def disable_high_ping_limit(self) -> str:
-        """Disable (set to 0) the high ping limit"""
+        """Disable (set to 0) the high ping limit
+
+        Returns
+            SUCCESS or FAIL
+        """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
@@ -770,7 +838,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetTeamSwitchCooldown {cooldown}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_auto_balance_enabled(self) -> str:
         """Return if team auto balance (enforced differences in team sizes) is enabled
@@ -782,7 +852,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Get AutoBalanceEnabled"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_on_off_validator
+        )
 
     async def enable_auto_balance(self) -> str:
         """Enable the team auto balance (enforced differences in team sizes) feature
@@ -794,7 +866,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetAutobalanceEnabled {constants.HLL_BOOL_ENABLED}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def disable_auto_balance(self) -> str:
         """Disable the team auto balance (enforced differences in team sizes) feature
@@ -806,7 +880,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetAutobalanceEnabled {constants.HLL_BOOL_DISABLED}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_auto_balance_threshold(self) -> str:
         """Return the allowed team size difference before players are forced to join the other team"""
@@ -826,7 +902,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetAutoBalanceThreshold {threshold}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_vote_kick_enabled(self) -> str:
         """Return if vote to kick players is enabled
@@ -838,7 +916,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Get VoteKickEnabled"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_on_off_validator
+        )
 
     async def enable_vote_kick(self) -> str:
         """Enable the vote to kick players feature
@@ -851,7 +931,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetVoteKickEnabled  {constants.HLL_BOOL_ENABLED}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def disable_vote_kick(self) -> str:
         """Disable the vote to kick players feature
@@ -863,7 +945,9 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetVoteKickEnabled  {constants.HLL_BOOL_DISABLED}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_vote_kick_thresholds(self) -> str:
         """Return the required number of votes to remove from the server in threshold pairs
@@ -891,18 +975,27 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"SetVoteKickThreshold {threshold_pairs}"
-        return await self._send_to_game_server(content)
+
+        # This validator won't work 100% of the time since this can return error messages
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def clear_vote_kick_threshold(self) -> str:
         """Clear vote kick threshold pairs
 
         Removes all the threshold pairs, the game server does not appear to have defaults
+
+        Returns
+            SUCCESS or FAIL
         """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"ResetVoteKickThreshold"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def get_censored_words(self) -> str:
         """Return a HLL tab delimited list of all words that will be censored in game chat"""
@@ -928,13 +1021,15 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"BanProfanity {words}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )
 
     async def uncensor_words(self, words: str) -> str:
         """Remove a comma delimited list of words to censor in game chat
 
         Args
-            words: Must be a comma separated list, white space between commas is preserved
+            words: Must be a comma separated list, response_validator=_success_fail_validator, white space between commas is preserved
 
         Returns
             SUCCESS or FAIL
@@ -944,4 +1039,6 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"UnbanProfanity {words}"
-        return await self._send_to_game_server(content)
+        return await self._send_to_game_server(
+            content, response_validator=_success_fail_validator
+        )

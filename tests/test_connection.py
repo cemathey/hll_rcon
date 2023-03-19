@@ -1,6 +1,6 @@
 import pytest
 
-from async_hll_rcon.connection import _validator_player_info
+from async_hll_rcon.connection import _player_info_validator
 
 
 @pytest.mark.parametrize(
@@ -34,4 +34,4 @@ from async_hll_rcon.connection import _validator_player_info
     ],
 )
 def test_validator_player_info(raw, player_name, expected):
-    assert _validator_player_info(raw, player_name) == expected
+    assert _player_info_validator(raw, player_name) == expected

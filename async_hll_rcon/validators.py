@@ -4,7 +4,31 @@ from async_hll_rcon import constants
 from async_hll_rcon.typedefs import FailedGameServerCommand, FailedGameServerResponse
 
 
-def _validator_player_info(
+def _success_fail_validator(result: str) -> bool:
+    """Generic validator for commands that only return SUCCESS or FAIL"""
+    if result == constants.SUCCESS_RESPONSE:
+        return True
+    elif result == constants.FAIL_RESPONSE:
+        return False
+    else:
+        raise ValueError(
+            f"{result=} not in ({constants.SUCCESS_RESPONSE}, {constants.FAIL_RESPONSE})"
+        )
+
+
+def _on_off_validator(result: str) -> bool:
+    """Generic validator for commands that only return `on` or `off"""
+    if result == constants.HLL_BOOL_ENABLED:
+        return True
+    elif result == constants.HLL_BOOL_DISABLED:
+        return False
+    else:
+        raise ValueError(
+            f"{result=} not in ({constants.HLL_BOOL_ENABLED}, {constants.HLL_BOOL_DISABLED})"
+        )
+
+
+def _player_info_validator(
     player_info: str, conn_id: int, player_name: str | None = None
 ) -> bool:
     """Return if the result from get_player_info appears to be complete"""
@@ -31,6 +55,40 @@ def _validator_player_info(
     if len(test_keys) < len(required_keys):
         logger.debug(
             f"Bailing early because player info is too short: `{player_name=}` `{player_info=}`"
+        )
+        return False
+
+    for test_key in test_keys:
+        if test_key:
+            key, _ = test_key.split(": ", maxsplit=1)
+            found_keys.add(key)
+
+    if not all(key in found_keys for key in required_keys):
+        logger.error(f"{found_keys=} {required_keys=}")
+        return False
+
+    return is_complete
+
+
+def _gamestate_validator(raw_gamestate: str) -> bool:
+    """Return if the result from get_player_info appears to be complete"""
+    logger.debug(f"_gamestate_validator({raw_gamestate=})")
+
+    is_complete = True
+
+    # Players: Allied: 46 - Axis: 46
+    # Score: Allied: 4 - Axis: 1
+    # Remaining Time: 0:25:23
+    # Map: carentan_offensive_ger
+    # Next Map: hurtgenforest_warfare_V2
+
+    required_keys = set(["Players", "Score", "Remaining Time", "Map", "Next Map"])
+    found_keys: set[str] = set()
+
+    test_keys = raw_gamestate.split("\n")
+    if len(test_keys) < len(required_keys):
+        logger.debug(
+            f"Bailing early because player info is too short: `{raw_gamestate=}`"
         )
         return False
 
