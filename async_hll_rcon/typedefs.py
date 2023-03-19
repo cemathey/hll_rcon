@@ -3,6 +3,14 @@ from datetime import datetime, timedelta
 import pydantic
 
 
+class FailedGameServerResponse(Exception):
+    """Raised when a game server command fails"""
+
+
+class FailedGameServerCommand(Exception):
+    """Raised when out of reattempts"""
+
+
 class TemporaryBanType(pydantic.BaseModel):
     """Represents a HLL temporary ban log"""
 
