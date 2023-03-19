@@ -990,24 +990,23 @@ class AsyncRcon:
             return None
 
         lines = raw_player_info.strip().split("\n")
-
         if len(lines) == 1:
             raise ValueError(
                 f"Received an invalid or incomplete `PlayerInfo`=`{raw_player_info}` from the game server"
             )
 
-        (
-            player_name,
-            steam_id_64,
-            raw_team,
-            team,
-            role,
-            unit,
-            loadout,
-            kills,
-            deaths,
-            level,
-        ) = (None, None, None, None, None, None, None, None, None, None)
+        player_name: str | None = None
+        steam_id_64: str | None = None
+        raw_team: str | None = None
+        team: str | None = None
+        role: str | None = None
+        unit: SquadType | None = None
+        loadout: str | None = None
+        kills: str | None = None
+        deaths: str | None = None
+        level: str | None = None
+
+        raw_scores = ""
         scores: dict[str, int] = {}
 
         for line in lines:
@@ -1039,17 +1038,22 @@ class AsyncRcon:
         else:
             team = raw_team
 
-        try:
-            for raw_score in raw_scores.split(","):
-                key, score = raw_score.split(maxsplit=1)
-                scores[key] = int(score)
-        except UnboundLocalError:
-            logger.error(f"{lines=}")
-            raise
+        for raw_score in raw_scores.split(","):
+            key, score = raw_score.split(maxsplit=1)
+            scores[key] = int(score)
+
+        if any(
+            key is None
+            for key in (player_name, steam_id_64, kills, deaths, role, level)
+        ):
+            logger.error(f"{raw_player_info}")
+            raise ValueError(
+                f"Received an invalid or incomplete `PlayerInfo`=`{raw_player_info}` from the game server"
+            )
 
         processed_score = ScoreType(
-            kills=int(kills),
-            deaths=int(deaths),
+            kills=int(kills),  # type: ignore
+            deaths=int(deaths),  # type: ignore
             combat=scores["C"],
             offensive=scores["O"],
             defensive=scores["D"],
@@ -1057,14 +1061,14 @@ class AsyncRcon:
         )
 
         return PlayerInfoType(
-            player_name=player_name,
-            steam_id_64=steam_id_64,
+            player_name=player_name,  # type: ignore
+            steam_id_64=steam_id_64,  # type: ignore
             team=team,
-            role=role,
+            role=role,  # type: ignore
             unit=unit,
             loadout=loadout,
             score=processed_score,
-            level=int(level),
+            level=int(level),  # type: ignore
         )
 
     async def get_player_info(
