@@ -1,4 +1,5 @@
 import inspect
+from functools import wraps
 from itertools import cycle
 from typing import Callable, Self
 
@@ -8,65 +9,52 @@ from loguru import logger
 from async_hll_rcon import constants
 
 
-def _validator_player_info(player_info: str, player_name: str | None = None) -> bool:
+class FailedGameServerResponse(Exception):
+    """Raised when a game server command fails"""
+
+
+class FailedGameServerCommand(Exception):
+    """Raised when out of reattempts"""
+
+
+def _validator_player_info(
+    player_info: str, conn_id: int, player_name: str | None = None
+) -> bool:
     """Return if the result from get_player_info appears to be complete"""
-    logger.debug(f"_validator_player_info({player_info=}, {player_name=})")
+    logger.debug(f"{conn_id} _validator_player_info({player_info=}, {player_name=})")
+
+    if player_info == constants.FAIL_RESPONSE:
+        logger.warning(
+            f"Received {player_info} in _validator_player_info for {player_name}"
+        )
+        return True
+
+    if player_info == "":
+        logger.error(f"{FailedGameServerResponse} for `{player_name=}`")
+        raise FailedGameServerResponse
+
     is_complete = True
 
-    mandatory_keys_without_unit = [
-        "Name",
-        "steamID64",
-        "Team",
-        "Role",
-        # "Unit",
-        "Loadout",
-        "Kills",
-        "Score",
-        "Level",
-        "",
-    ]
-
-    mandatory_keys_with_unit = [
-        "Name",
-        "steamID64",
-        "Team",
-        "Role",
-        "Unit",
-        "Loadout",
-        "Kills",
-        "Score",
-        "Level",
-        "",
-    ]
+    required_keys = set(
+        ["Name", "steamID64", "Team", "Role", "Kills", "Score", "Level"]
+    )
+    found_keys: set[str] = set()
 
     test_keys = player_info.split("\n")
-    mandatory_keys: list[str] | None = None
-    if len(test_keys) == 9:
-        logger.debug(f"{len(test_keys)=}")
-        mandatory_keys = mandatory_keys_without_unit
-    elif len(test_keys) == 10:
-        logger.debug(f"{len(test_keys)=}")
-        mandatory_keys = mandatory_keys_with_unit
-    else:
-        logger.debug("Bailing early because player info is too short")
+    if len(test_keys) < len(required_keys):
+        logger.debug(
+            f"Bailing early because player info is too short: `{player_name=}` `{player_info=}`"
+        )
         return False
 
-    for test_key, mandatory_key in zip(test_keys, mandatory_keys, strict=True):
-        if mandatory_key == "Name":
-            _, name = test_key.split("Name: ")
-            # Check to make sure the game server is returning info for the player we requested
-            if name != player_name:
-                logger.debug(
-                    f"Name did not match {test_key=} {mandatory_key=} {name=} {player_name=}"
-                )
-                raise ValueError(
-                    f"Game server returned get_player_info() for the wrong player"
-                )
+    for test_key in test_keys:
+        if test_key:
+            key, _ = test_key.split(": ", maxsplit=1)
+            found_keys.add(key)
 
-        if not test_key.startswith(mandatory_key):
-            logger.debug(f"{test_key=} {mandatory_key=}")
-            logger.debug(f"_validator_player_info({player_info!r}) incomplete ")
-            return False
+    if not all(key in found_keys for key in required_keys):
+        logger.error(f"{found_keys=} {required_keys=}")
+        return False
 
     return is_complete
 
@@ -136,7 +124,7 @@ class HllConnection:
             raise ValueError("Socket connection to the game server not established.")
 
     @staticmethod
-    def xor_encode(
+    def _xor_encode(
         message: str | bytes, xor_key: bytes, encoding: str = "utf-8"
     ) -> bytes:
         """XOR encrypt the given message with the given XOR key"""
@@ -151,9 +139,9 @@ class HllConnection:
         )
 
     @staticmethod
-    def xor_decode(cipher_text: str | bytes, xor_key: bytes) -> str:
+    def _xor_decode(cipher_text: str | bytes, xor_key: bytes) -> str:
         """XOR decrypt the given cipher text with the given XOR key"""
-        return HllConnection.xor_encode(cipher_text, xor_key).decode("utf-8")
+        return HllConnection._xor_encode(cipher_text, xor_key).decode("utf-8")
 
     @classmethod
     async def setup(
@@ -210,35 +198,55 @@ class HllConnection:
                     # return values can be identified as complete and valid return
                     # results, and if so we can return early, otherwise we block
                     # until we time out
+                    logger.debug(f"{validator=}")
                     if validator and validator(
-                        self.xor_decode(buffer, self.xor_key), **kwargs
+                        self._xor_decode(buffer, self.xor_key), **kwargs
                     ):
                         logger.debug(f"breaking on complete chunk")
                         break
 
             except trio.TooSlowError:
+                if validator:
+                    logger.error(
+                        f"Timed out in {id(self)} buffer=`{self._xor_decode(buffer, self.xor_key)}`"
+                    )
+                    raise
                 break
 
         return bytes(buffer)
 
     async def _send_to_game_server(
-        self, content: str, response_validator: Callable | None = None, **kwargs
+        self,
+        content: str,
+        response_validator: Callable | None = None,
+        retry_attempts: int = 2,
+        **kwargs,
     ) -> str:
         """XOR the content and send to the game server, returning the game server response"""
-        logger.debug(f"{len(content)=}")
-        xored_content = HllConnection.xor_encode(content, self.xor_key)
-        logger.debug(f"{len(xored_content)=}")
+        logger.debug(f"{id(self)} {len(content)=} {content=}")
+        xored_content = HllConnection._xor_encode(content, self.xor_key)
+        result = None
+        for _ in range(retry_attempts):
+            try:
+                with trio.fail_after(self.tcp_timeout):
+                    logger.debug(f"sending content=`{content}`")
+                    await self.connection.send_all(xored_content)
+                    result = await self._receive_from_game_server(
+                        validator=response_validator, **kwargs
+                    )
+                    break
+            except (FailedGameServerResponse, trio.TooSlowError) as e:
+                logger.error(
+                    f"{id(self)} {content=} {len(content)=} Failed attempt #{_+1}/{retry_attempts} {e}"
+                )
+                continue
 
-        with trio.fail_after(self.tcp_timeout):
-            logger.debug(f"sending content=`{content}`")
-            await self.connection.send_all(xored_content)
-            result = await self._receive_from_game_server(
-                validator=response_validator, **kwargs
-            )
+        if not result:
+            raise FailedGameServerCommand
 
         logger.warning(f"received {len(result)=} bytes")
 
-        return HllConnection.xor_decode(result, self.xor_key)
+        return HllConnection._xor_decode(result, self.xor_key)
 
     async def login(self) -> str:
         """Log into the game server with the ip/port/password provided during initialization
@@ -542,12 +550,15 @@ class HllConnection:
 
         """
         logger.debug(
-            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
+            f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}({player_name=})"  # type: ignore
         )
         content = f"PlayerInfo {player_name}"
-        return await self._send_to_game_server(
-            content, _validator_player_info, player_name=player_name
+        result = await self._send_to_game_server(
+            content, _validator_player_info, player_name=player_name, conn_id=id(self)
         )
+
+        logger.debug(f"{id(self)} {result=}")
+        return result
 
     async def add_vip(self, steam_id_64: str, name: str | None) -> str:
         """Grant VIP status to the given steam ID"""

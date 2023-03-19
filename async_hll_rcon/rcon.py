@@ -2,7 +2,7 @@ import inspect
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import AsyncGenerator, Generator, Iterable
+from typing import AsyncGenerator, Generator, Iterable, MutableSequence
 from warnings import warn
 
 import trio
@@ -35,6 +35,7 @@ from async_hll_rcon.typedefs import (
     PlayerInfoType,
     ScoreType,
     ServerPlayerSlotsType,
+    SquadType,
     TeamKillLogType,
     TeamSwitchCoolDownType,
     TeamSwitchLogType,
@@ -984,32 +985,67 @@ class AsyncRcon:
         return [self._parse_get_vip_ids(vip_id) for vip_id in vip_ids]
 
     @staticmethod
-    def _parse_player_info(raw_player_info: str) -> PlayerInfoType:
+    def _parse_player_info(raw_player_info: str) -> PlayerInfoType | None:
+        if raw_player_info == constants.FAIL_RESPONSE:
+            return None
+
         lines = raw_player_info.strip().split("\n")
-        if len(lines) != 7:
+
+        if len(lines) == 1:
             raise ValueError(
-                f"Received an invalid or incomplete `PlayerInfo` from the game server"
+                f"Received an invalid or incomplete `PlayerInfo`=`{raw_player_info}` from the game server"
             )
 
-        _, player_name = lines[0].split("Name: ")
-        _, steam_id_64 = lines[1].split("steamID64: ")
-        _, raw_team = lines[2].split("Team: ")
-        _, role = lines[3].split("Role: ")
-        left, right = lines[4].split(" - ")
-        _, kills = left.split("Kills: ")
-        _, deaths = right.split("Deaths: ")
-        _, raw_scores = lines[5].split("Score: ")
-        _, level = lines[6].split("Level: ")
+        (
+            player_name,
+            steam_id_64,
+            raw_team,
+            team,
+            role,
+            unit,
+            loadout,
+            kills,
+            deaths,
+            level,
+        ) = (None, None, None, None, None, None, None, None, None, None)
+        scores: dict[str, int] = {}
+
+        for line in lines:
+            if line.startswith("Name"):
+                _, player_name = line.split("Name: ")
+            elif line.startswith("steam"):
+                _, steam_id_64 = line.split("steamID64: ")
+            elif line.startswith("Team"):
+                _, raw_team = line.split("Team: ")
+            elif line.startswith("Role"):
+                _, role = line.split("Role: ")
+            elif line.startswith("Unit"):
+                left, unit_name = line.split(" - ")
+                _, unit_id = left.split("Unit: ")
+                unit = SquadType(unit_id=int(unit_id), unit_name=unit_name)
+            elif line.startswith("Unit"):
+                _, loadout = line.split("Loadout: ")
+            elif line.startswith("Kills"):
+                left, right = line.split(" - ")
+                _, kills = left.split("Kills: ")
+                _, deaths = right.split("Deaths: ")
+            elif line.startswith("Score"):
+                _, raw_scores = line.split("Score: ")
+            elif line.startswith("Level"):
+                _, level = line.split("Level: ")
 
         if raw_team == "None":
             team = None
         else:
             team = raw_team
 
-        scores: dict[str, int] = {}
-        for raw_score in raw_scores.split(","):
-            key, score = raw_score.split(maxsplit=1)
-            scores[key] = int(score)
+        try:
+            for raw_score in raw_scores.split(","):
+                key, score = raw_score.split(maxsplit=1)
+                scores[key] = int(score)
+        except UnboundLocalError:
+            logger.error(f"{lines=}")
+            raise
 
         processed_score = ScoreType(
             kills=int(kills),
@@ -1025,11 +1061,15 @@ class AsyncRcon:
             steam_id_64=steam_id_64,
             team=team,
             role=role,
+            unit=unit,
+            loadout=loadout,
             score=processed_score,
             level=int(level),
         )
 
-    async def get_player_info(self, player_name: str) -> PlayerInfoType:
+    async def get_player_info(
+        self, player_name: str, output: MutableSequence | None = None
+    ) -> PlayerInfoType | None:
         """Return detailed player info for the given player name"""
         if not player_name:
             raise ValueError("Must provide a player name")
@@ -1037,10 +1077,16 @@ class AsyncRcon:
         async with self._get_connection() as conn:
             result = await conn.get_player_info(player_name=player_name)
             logger.debug(
-                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
+                f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=} {player_name=}"  # type: ignore
             )
 
-        return self._parse_player_info(result)
+        # logger.warning(f"{result=} {player_name=}")
+        validated_result = self._parse_player_info(result)
+
+        if output is not None:
+            output.append(validated_result)
+
+        return validated_result
 
     async def add_vip(self, steam_id_64: str, name: str | None):
         """Grant VIP status to the given steam ID

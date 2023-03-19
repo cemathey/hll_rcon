@@ -158,11 +158,18 @@ class ScoreType(pydantic.BaseModel):
     support: int
 
 
+class SquadType(pydantic.BaseModel):
+    unit_id: int
+    unit_name: str
+
+
 class PlayerInfoType(pydantic.BaseModel):
     player_name: str
     steam_id_64: str
     team: str | None
     role: str
+    loadout: str | None
+    unit: SquadType | None
     score: ScoreType
     level: int
 
