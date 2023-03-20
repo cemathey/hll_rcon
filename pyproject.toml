@@ -8,7 +8,6 @@ packages = [{ include = "async_hll_rcon" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-brotli = "^1.0.9"
 trio = "^0.22.0"
 loguru = "^0.6.0"
 pydantic = "^1.10.5"
