@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 
 import pydantic
 
+from async_hll_rcon import constants
+
 
 class FailedGameServerResponse(Exception):
     """Raised when a game server command fails"""
@@ -9,6 +11,18 @@ class FailedGameServerResponse(Exception):
 
 class FailedGameServerCommand(Exception):
     """Raised when out of reattempts"""
+
+
+class ServerNameType(pydantic.BaseModel):
+    name: str
+
+
+class MaxQueueSizeType(pydantic.BaseModel):
+    size: int
+
+
+class NumVipSlotsType(pydantic.BaseModel):
+    count: int
 
 
 class TemporaryBanType(pydantic.BaseModel):
@@ -107,12 +121,8 @@ class HighPingLimitType(pydantic.BaseModel):
     limit: pydantic.conint(ge=0)  # type: ignore
 
 
-class AutoBalanceEnabledType(pydantic.BaseModel):
-    enabled: bool
-
-
-class VoteKickEnabledType(pydantic.BaseModel):
-    enabled: bool
+class VoteKickStateType(pydantic.BaseModel):
+    state: bool
 
 
 class TeamSwitchCoolDownType(pydantic.BaseModel):
@@ -136,6 +146,10 @@ class ServerPlayerSlotsType(pydantic.BaseModel):
     max_players: int
 
 
+class AutoBalanceStateType(pydantic.BaseModel):
+    state: bool
+
+
 class GameStateType(pydantic.BaseModel):
     allied_players: int
     axis_players: int
@@ -146,10 +160,44 @@ class GameStateType(pydantic.BaseModel):
     next_map: str
 
 
+class CensoredWordType(pydantic.BaseModel):
+    word: str
+
+
+class MapType(pydantic.BaseModel):
+    name: str
+
+
+class AvailableMapsType(pydantic.BaseModel):
+    maps: list[MapType]
+
+
+class MapRotationType(pydantic.BaseModel):
+    maps: list[MapType]
+
+
 class AdminIdType(pydantic.BaseModel):
     steam_id_64: str
     role: str
     name: str
+
+
+class PlayerNameType(pydantic.BaseModel):
+    name: str
+
+
+class SteamIdType(pydantic.BaseModel):
+    steam_id_64: str
+
+
+class AdminGroupType(pydantic.BaseModel):
+    type: str
+
+    @pydantic.validator("type")
+    def valid_admin_role(cls, v):
+        if v not in constants.VALID_ADMIN_ROLES:
+            raise ValueError(f"{v=} not in {constants.VALID_ADMIN_ROLES=}")
+        return v
 
 
 class VipIdType(pydantic.BaseModel):
