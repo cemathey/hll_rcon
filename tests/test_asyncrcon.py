@@ -37,6 +37,7 @@ def test_xor_decode(cipher_text, xor_key, expected):
 @pytest.mark.parametrize(
     "raw, expected",
     [
+        ("0\t", []),
         (
             "3\t\t\t",
             ["", "", ""],

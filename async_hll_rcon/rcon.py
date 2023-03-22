@@ -208,12 +208,13 @@ class AsyncRcon:
         expected_length, *items = raw_list.split(separator)
         expected_length = int(expected_length)
 
+        if len(items) == 1 and not items[0]:
+            return []
+
         if len(items) < expected_length:
             logger.debug(f"{expected_length=}")
             logger.debug(f"{len(items)=}")
             logger.debug(f"{items=}")
-            if len(items) == 1 and not items[0]:
-                return []
 
         if len(items) > 0 and items[0] and not items[-1]:
             logger.debug(f"{items[:-1]=}")
@@ -1018,25 +1019,21 @@ class AsyncRcon:
     @staticmethod
     def _parse_get_player_steam_ids(
         name_and_ids: list[str],
-    ) -> tuple[dict[SteamIdType, PlayerNameType], dict[PlayerNameType, SteamIdType]]:
+    ) -> tuple[dict[str, PlayerNameType], dict[str, SteamIdType]]:
         """Parse name and steam ID pairs into dictionaries"""
-        steam_id_64_lookup: dict[SteamIdType, PlayerNameType] = {}
-        player_name_lookup: dict[PlayerNameType, SteamIdType] = {}
+        steam_id_64_lookup: dict[str, PlayerNameType] = {}
+        player_name_lookup: dict[str, SteamIdType] = {}
 
         for pair in name_and_ids:
             player_name, steam_id_64 = pair.split(" : ")
-            steam_id_64_lookup[SteamIdType(steam_id_64=steam_id_64)] = PlayerNameType(
-                name=player_name
-            )
-            player_name_lookup[PlayerNameType(name=player_name)] = SteamIdType(
-                steam_id_64=steam_id_64
-            )
+            steam_id_64_lookup[steam_id_64] = PlayerNameType(name=player_name)
+            player_name_lookup[player_name] = SteamIdType(steam_id_64=steam_id_64)
 
         return steam_id_64_lookup, player_name_lookup
 
     async def get_player_steam_ids(
         self,
-    ) -> tuple[dict[SteamIdType, PlayerNameType], dict[PlayerNameType, SteamIdType]]:
+    ) -> tuple[dict[str, PlayerNameType], dict[str, SteamIdType]]:
         """Get the player names and steam IDs of all the players currently connected to the game server
 
         Returns
