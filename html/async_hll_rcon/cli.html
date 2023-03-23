@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>async_hll_rcon.cli API documentation</title>
+<meta name="description" content="" />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>async_hll_rcon.cli</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">import os
+import sys
+import time
+from collections import defaultdict
+from datetime import datetime
+from pprint import pprint
+
+import trio
+from loguru import logger
+
+from async_hll_rcon.rcon import AsyncRcon
+from async_hll_rcon.typedefs import (
+    BanLogType,
+    KickLogType,
+    VoteKickPassedLogType,
+    VoteKickPlayerVoteLogType,
+    VoteKickResultsLogType,
+    VoteKickStartedLogType,
+    VoteKickStateType,
+    VoteKickThresholdType,
+)
+
+
+class Tracer(trio.abc.Instrument):
+    def before_run(self):
+        print(&#34;!!! run started&#34;)
+
+    def _print_with_task(self, msg, task):
+        # repr(task) is perhaps more useful than task.name in general,
+        # but in context of a tutorial the extra noise is unhelpful.
+        print(f&#34;{msg}: {task.name}&#34;)
+
+    def task_spawned(self, task):
+        self._print_with_task(&#34;### new task spawned&#34;, task)
+
+    def task_scheduled(self, task):
+        self._print_with_task(&#34;### task scheduled&#34;, task)
+
+    def before_task_step(self, task):
+        self._print_with_task(&#34;&gt;&gt;&gt; about to run one step of task&#34;, task)
+
+    def after_task_step(self, task):
+        self._print_with_task(&#34;&lt;&lt;&lt; task step finished&#34;, task)
+
+    def task_exited(self, task):
+        self._print_with_task(&#34;### task exited&#34;, task)
+
+    def before_io_wait(self, timeout):
+        if timeout:
+            print(f&#34;### waiting for I/O for up to {timeout} seconds&#34;)
+        else:
+            print(&#34;### doing a quick check for I/O&#34;)
+        self._sleep_time = trio.current_time()
+
+    def after_io_wait(self, timeout):
+        duration = trio.current_time() - self._sleep_time
+        print(f&#34;### finished I/O check (took {duration} seconds)&#34;)
+
+    def after_run(self):
+        print(&#34;!!! run finished&#34;)
+
+
+async def main():
+    logger.add(&#34;cli.log&#34;)
+
+    host, port, password = (
+        os.getenv(&#34;RCON_HOST&#34;),
+        os.getenv(&#34;RCON_PORT&#34;),
+        os.getenv(&#34;RCON_PASSWORD&#34;),
+    )
+
+    if not host or not port or not password:
+        logger.error(f&#34;RCON_HOST, RCON_PORT or RCON_PASSWORD not set&#34;)
+        return
+
+    rcon = AsyncRcon(host, port, password, connection_pool_size=6)
+    await rcon.setup()
+    async with trio.open_nursery() as nursery:
+        pass
+
+    logger.debug(f&#34;===========================&#34;)
+    # logger.debug(await rcon.get_vip_ids())
+    # logger.debug(await rcon.get_temp_bans())
+
+    # logger.debug(await rcon.get_map_rotation())
+    # logger.debug(await rcon.get_available_maps())
+    logger.debug(await rcon.get_admin_groups())
+    # bans = await rcon.get_permanent_bans()
+    # for b in bans:
+    #     if b:
+    #         print(b)
+
+    names = await rcon.get_players()
+    pprint(names)
+    # sys.exit()
+    # logger.debug(f&#34;{names=}&#34;)
+
+    # start_time = time.perf_counter()
+    # logger.debug(f&#34;{datetime.now()}&#34;)
+    detailed_player_info = []
+    async with trio.open_nursery() as nursery:
+        for name in names:
+            logger.warning(f&#34;Looking up player `{name=}`&#34;)
+            nursery.start_soon(rcon.get_player_info, name, detailed_player_info)
+
+    none_players = [p for p in detailed_player_info if p is None]
+
+    logger.debug(detailed_player_info)
+    logger.debug(f&#34;{len(detailed_player_info)=}&#34;)
+    logger.debug(f&#34;{len(names)=}&#34;)
+    logger.debug(f&#34;{len(none_players)=}&#34;)
+
+    logger.debug(await rcon.get_gamestate())
+
+    # stop_time = time.perf_counter()
+    # logger.debug(f&#34;{datetime.now()}&#34;)
+    # logger.debug(f&#34;{(stop_time - start_time)}&#34;)
+    # logger.debug(await rcon.get_server_name())
+
+    logger.debug(f&#34;===========================&#34;)
+    # logger.debug(await rcon.kick_player(&#34;NoodleArms&#34;, &#34;Testing&#39;&#34;))
+    # logger.debug(
+    #     await rcon.temp_ban_player(
+    #         steam_id_64=&#34;76561198004895814&#34;,
+    #         player_name=None,
+    #         duration=None,
+    #         reason=None,
+    #         by_admin_name=None,
+    #     )
+    # )
+    # logger.debug(await rcon.remove_temp_ban(TempBanType(steam_id_64=&#34;76561198004895814&#34;, player_name=None, duration=None, reason=None, admin=None)))
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
+
+    # logger.debug(
+    #     await rcon.remove_perma_ban(
+    #         PermanentBanType(
+    #             steam_id_64=&#34;76561198004895814&#34;,
+    #             player_name=None,
+    #             timestamp=datetime(
+    #                 year=2023, month=3, day=6, hour=20, minute=59, second=29
+    #             ),
+    #             reason=None,
+    #             admin=None,
+    #         )
+    #     )
+    # )
+    # logger.debug(await rcon.perma_ban_player(&#34;76561198004895814&#34;))
+
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
+    # logger.debug(
+    #     await rcon.remove_temp_ban(
+    #         &#34;76561198004895814 : banned for 2 hours on 2023.03.06-15.23.26&#34;
+    #     )
+    # )
+
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(1))
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(0))
+    # logger.debug(await rcon.get_idle_kick_time())
+
+    # logger.debug(await rcon.get_game_logs(5))
+    # logs = await rcon.get_game_logs(360)
+    # print(f&#34;{len(logs)=}&#34;)
+    # none_Logs = [l for l in logs if not l]
+    # print(f&#34;{len(none_Logs)=}&#34;)
+
+    # vote_log_types = (
+    #     VoteKickEnabledType,
+    #     VoteKickPassedLogType,
+    #     VoteKickPlayerVoteLogType,
+    #     VoteKickResultsLogType,
+    #     VoteKickStartedLogType,
+    #     VoteKickThresholdType,
+    # )
+
+    # vote_logs = [
+    #     log for log in logs if any(isinstance(log, _type) for _type in vote_log_types)
+    # ]
+
+    # vote_tallies = defaultdict(
+    #     lambda: {&#34;PV_Favour&#34;: 0, &#34;PV_Ignored&#34;: 0, &#34;PV_Against&#34;: 0}
+    # )
+
+    # # results = {&#34;PV_Favour&#34;: 0, &#34;PV_Ignored&#34;: 0, &#34;PV_Against&#34;: 0}
+
+    # for vote_log in vote_logs:
+    #     if isinstance(vote_log, VoteKickPlayerVoteLogType):
+    #         vote_tallies[vote_log.vote_id][vote_log.vote_type] += 1
+
+    #     if isinstance(vote_log, VoteKickResultsLogType):
+    #         logger.debug(f&#34;{vote_log=}&#34;)
+
+    # # logger.debug(f&#34;{vote_tallies=}&#34;)
+    # pprint(vote_tallies)
+
+    # kick_logs = [log for log in logs if isinstance(log, KickLogType)]
+    # ban_logs = [log for log in logs if isinstance(log, BanLogType)]
+
+    # for kick_log in kick_logs:
+    #     logger.debug(f&#34;{kick_log=}&#34;)
+
+    # for ban_log in ban_logs:
+    #     logger.debug(f&#34;{ban_log=}&#34;)
+
+    # logger.debug(await rcon.message_player(&#34;test message&#34;, &#34;76561198004895814&#34;))
+    # logger.debug(
+    #     await rcon.set_welcome_message(
+    #         &#34;Test welcome message\nnext line\n\ntwo lines down&#34;
+    #     )
+    # )
+
+    # for log in logs:
+    #     print(type(log))
+
+
+if __name__ == &#34;__main__&#34;:
+    # trio.run(main, instruments=[Tracer()])
+    trio.run(main)</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="async_hll_rcon.cli.main"><code class="name flex">
+<span>async def <span class="ident">main</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">async def main():
+    logger.add(&#34;cli.log&#34;)
+
+    host, port, password = (
+        os.getenv(&#34;RCON_HOST&#34;),
+        os.getenv(&#34;RCON_PORT&#34;),
+        os.getenv(&#34;RCON_PASSWORD&#34;),
+    )
+
+    if not host or not port or not password:
+        logger.error(f&#34;RCON_HOST, RCON_PORT or RCON_PASSWORD not set&#34;)
+        return
+
+    rcon = AsyncRcon(host, port, password, connection_pool_size=6)
+    await rcon.setup()
+    async with trio.open_nursery() as nursery:
+        pass
+
+    logger.debug(f&#34;===========================&#34;)
+    # logger.debug(await rcon.get_vip_ids())
+    # logger.debug(await rcon.get_temp_bans())
+
+    # logger.debug(await rcon.get_map_rotation())
+    # logger.debug(await rcon.get_available_maps())
+    logger.debug(await rcon.get_admin_groups())
+    # bans = await rcon.get_permanent_bans()
+    # for b in bans:
+    #     if b:
+    #         print(b)
+
+    names = await rcon.get_players()
+    pprint(names)
+    # sys.exit()
+    # logger.debug(f&#34;{names=}&#34;)
+
+    # start_time = time.perf_counter()
+    # logger.debug(f&#34;{datetime.now()}&#34;)
+    detailed_player_info = []
+    async with trio.open_nursery() as nursery:
+        for name in names:
+            logger.warning(f&#34;Looking up player `{name=}`&#34;)
+            nursery.start_soon(rcon.get_player_info, name, detailed_player_info)
+
+    none_players = [p for p in detailed_player_info if p is None]
+
+    logger.debug(detailed_player_info)
+    logger.debug(f&#34;{len(detailed_player_info)=}&#34;)
+    logger.debug(f&#34;{len(names)=}&#34;)
+    logger.debug(f&#34;{len(none_players)=}&#34;)
+
+    logger.debug(await rcon.get_gamestate())
+
+    # stop_time = time.perf_counter()
+    # logger.debug(f&#34;{datetime.now()}&#34;)
+    # logger.debug(f&#34;{(stop_time - start_time)}&#34;)
+    # logger.debug(await rcon.get_server_name())
+
+    logger.debug(f&#34;===========================&#34;)
+    # logger.debug(await rcon.kick_player(&#34;NoodleArms&#34;, &#34;Testing&#39;&#34;))
+    # logger.debug(
+    #     await rcon.temp_ban_player(
+    #         steam_id_64=&#34;76561198004895814&#34;,
+    #         player_name=None,
+    #         duration=None,
+    #         reason=None,
+    #         by_admin_name=None,
+    #     )
+    # )
+    # logger.debug(await rcon.remove_temp_ban(TempBanType(steam_id_64=&#34;76561198004895814&#34;, player_name=None, duration=None, reason=None, admin=None)))
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
+
+    # logger.debug(
+    #     await rcon.remove_perma_ban(
+    #         PermanentBanType(
+    #             steam_id_64=&#34;76561198004895814&#34;,
+    #             player_name=None,
+    #             timestamp=datetime(
+    #                 year=2023, month=3, day=6, hour=20, minute=59, second=29
+    #             ),
+    #             reason=None,
+    #             admin=None,
+    #         )
+    #     )
+    # )
+    # logger.debug(await rcon.perma_ban_player(&#34;76561198004895814&#34;))
+
+    # bans = await rcon.get_permanent_bans()
+    # for line in bans:
+    #     print(line)
+    # logger.debug(
+    #     await rcon.remove_temp_ban(
+    #         &#34;76561198004895814 : banned for 2 hours on 2023.03.06-15.23.26&#34;
+    #     )
+    # )
+
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(1))
+    # logger.debug(await rcon.get_idle_kick_time())
+    # logger.debug(await rcon.set_idle_kick_time(0))
+    # logger.debug(await rcon.get_idle_kick_time())
+
+    # logger.debug(await rcon.get_game_logs(5))
+    # logs = await rcon.get_game_logs(360)
+    # print(f&#34;{len(logs)=}&#34;)
+    # none_Logs = [l for l in logs if not l]
+    # print(f&#34;{len(none_Logs)=}&#34;)
+
+    # vote_log_types = (
+    #     VoteKickEnabledType,
+    #     VoteKickPassedLogType,
+    #     VoteKickPlayerVoteLogType,
+    #     VoteKickResultsLogType,
+    #     VoteKickStartedLogType,
+    #     VoteKickThresholdType,
+    # )
+
+    # vote_logs = [
+    #     log for log in logs if any(isinstance(log, _type) for _type in vote_log_types)
+    # ]
+
+    # vote_tallies = defaultdict(
+    #     lambda: {&#34;PV_Favour&#34;: 0, &#34;PV_Ignored&#34;: 0, &#34;PV_Against&#34;: 0}
+    # )
+
+    # # results = {&#34;PV_Favour&#34;: 0, &#34;PV_Ignored&#34;: 0, &#34;PV_Against&#34;: 0}
+
+    # for vote_log in vote_logs:
+    #     if isinstance(vote_log, VoteKickPlayerVoteLogType):
+    #         vote_tallies[vote_log.vote_id][vote_log.vote_type] += 1
+
+    #     if isinstance(vote_log, VoteKickResultsLogType):
+    #         logger.debug(f&#34;{vote_log=}&#34;)
+
+    # # logger.debug(f&#34;{vote_tallies=}&#34;)
+    # pprint(vote_tallies)
+
+    # kick_logs = [log for log in logs if isinstance(log, KickLogType)]
+    # ban_logs = [log for log in logs if isinstance(log, BanLogType)]
+
+    # for kick_log in kick_logs:
+    #     logger.debug(f&#34;{kick_log=}&#34;)
+
+    # for ban_log in ban_logs:
+    #     logger.debug(f&#34;{ban_log=}&#34;)
+
+    # logger.debug(await rcon.message_player(&#34;test message&#34;, &#34;76561198004895814&#34;))
+    # logger.debug(
+    #     await rcon.set_welcome_message(
+    #         &#34;Test welcome message\nnext line\n\ntwo lines down&#34;
+    #     )
+    # )
+
+    # for log in logs:
+    #     print(type(log))</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="async_hll_rcon.cli.Tracer"><code class="flex name class">
+<span>class <span class="ident">Tracer</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>The interface for run loop instrumentation.</p>
+<p>Instruments don't have to inherit from this abstract base class, and all
+of these methods are optional. This class serves mostly as documentation.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Tracer(trio.abc.Instrument):
+    def before_run(self):
+        print(&#34;!!! run started&#34;)
+
+    def _print_with_task(self, msg, task):
+        # repr(task) is perhaps more useful than task.name in general,
+        # but in context of a tutorial the extra noise is unhelpful.
+        print(f&#34;{msg}: {task.name}&#34;)
+
+    def task_spawned(self, task):
+        self._print_with_task(&#34;### new task spawned&#34;, task)
+
+    def task_scheduled(self, task):
+        self._print_with_task(&#34;### task scheduled&#34;, task)
+
+    def before_task_step(self, task):
+        self._print_with_task(&#34;&gt;&gt;&gt; about to run one step of task&#34;, task)
+
+    def after_task_step(self, task):
+        self._print_with_task(&#34;&lt;&lt;&lt; task step finished&#34;, task)
+
+    def task_exited(self, task):
+        self._print_with_task(&#34;### task exited&#34;, task)
+
+    def before_io_wait(self, timeout):
+        if timeout:
+            print(f&#34;### waiting for I/O for up to {timeout} seconds&#34;)
+        else:
+            print(&#34;### doing a quick check for I/O&#34;)
+        self._sleep_time = trio.current_time()
+
+    def after_io_wait(self, timeout):
+        duration = trio.current_time() - self._sleep_time
+        print(f&#34;### finished I/O check (took {duration} seconds)&#34;)
+
+    def after_run(self):
+        print(&#34;!!! run finished&#34;)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>trio.abc.Instrument</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="async_hll_rcon.cli.Tracer.after_io_wait"><code class="name flex">
+<span>def <span class="ident">after_io_wait</span></span>(<span>self, timeout)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called after handling pending I/O.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>timeout</code></strong> :&ensp;<code>float</code></dt>
+<dd>The number of seconds we were willing to
+wait. This much time may or may not have elapsed, depending on
+whether any I/O was ready.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def after_io_wait(self, timeout):
+    duration = trio.current_time() - self._sleep_time
+    print(f&#34;### finished I/O check (took {duration} seconds)&#34;)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.after_run"><code class="name flex">
+<span>def <span class="ident">after_run</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called just before :func:<code>trio.run</code> returns.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def after_run(self):
+    print(&#34;!!! run finished&#34;)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.after_task_step"><code class="name flex">
+<span>def <span class="ident">after_task_step</span></span>(<span>self, task)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called when we return to the main run loop after a task has yielded.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>task</code></strong> :&ensp;<code>trio.lowlevel.Task</code></dt>
+<dd>The task that just ran.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def after_task_step(self, task):
+    self._print_with_task(&#34;&lt;&lt;&lt; task step finished&#34;, task)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.before_io_wait"><code class="name flex">
+<span>def <span class="ident">before_io_wait</span></span>(<span>self, timeout)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called before blocking to wait for I/O readiness.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>timeout</code></strong> :&ensp;<code>float</code></dt>
+<dd>The number of seconds we are willing to wait.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def before_io_wait(self, timeout):
+    if timeout:
+        print(f&#34;### waiting for I/O for up to {timeout} seconds&#34;)
+    else:
+        print(&#34;### doing a quick check for I/O&#34;)
+    self._sleep_time = trio.current_time()</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.before_run"><code class="name flex">
+<span>def <span class="ident">before_run</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called at the beginning of :func:<code>trio.run</code>.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def before_run(self):
+    print(&#34;!!! run started&#34;)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.before_task_step"><code class="name flex">
+<span>def <span class="ident">before_task_step</span></span>(<span>self, task)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called immediately before we resume running the given task.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>task</code></strong> :&ensp;<code>trio.lowlevel.Task</code></dt>
+<dd>The task that is about to run.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def before_task_step(self, task):
+    self._print_with_task(&#34;&gt;&gt;&gt; about to run one step of task&#34;, task)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.task_exited"><code class="name flex">
+<span>def <span class="ident">task_exited</span></span>(<span>self, task)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called when the given task exits.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>task</code></strong> :&ensp;<code>trio.lowlevel.Task</code></dt>
+<dd>The finished task.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def task_exited(self, task):
+    self._print_with_task(&#34;### task exited&#34;, task)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.task_scheduled"><code class="name flex">
+<span>def <span class="ident">task_scheduled</span></span>(<span>self, task)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called when the given task becomes runnable.</p>
+<p>It may still be some time before it actually runs, if there are other
+runnable tasks ahead of it.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>task</code></strong> :&ensp;<code>trio.lowlevel.Task</code></dt>
+<dd>The task that became runnable.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def task_scheduled(self, task):
+    self._print_with_task(&#34;### task scheduled&#34;, task)</code></pre>
+</details>
+</dd>
+<dt id="async_hll_rcon.cli.Tracer.task_spawned"><code class="name flex">
+<span>def <span class="ident">task_spawned</span></span>(<span>self, task)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Called when the given task is created.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>task</code></strong> :&ensp;<code>trio.lowlevel.Task</code></dt>
+<dd>The new task.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def task_spawned(self, task):
+    self._print_with_task(&#34;### new task spawned&#34;, task)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="async_hll_rcon" href="index.html">async_hll_rcon</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="async_hll_rcon.cli.main" href="#async_hll_rcon.cli.main">main</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="async_hll_rcon.cli.Tracer" href="#async_hll_rcon.cli.Tracer">Tracer</a></code></h4>
+<ul class="two-column">
+<li><code><a title="async_hll_rcon.cli.Tracer.after_io_wait" href="#async_hll_rcon.cli.Tracer.after_io_wait">after_io_wait</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.after_run" href="#async_hll_rcon.cli.Tracer.after_run">after_run</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.after_task_step" href="#async_hll_rcon.cli.Tracer.after_task_step">after_task_step</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.before_io_wait" href="#async_hll_rcon.cli.Tracer.before_io_wait">before_io_wait</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.before_run" href="#async_hll_rcon.cli.Tracer.before_run">before_run</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.before_task_step" href="#async_hll_rcon.cli.Tracer.before_task_step">before_task_step</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.task_exited" href="#async_hll_rcon.cli.Tracer.task_exited">task_exited</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.task_scheduled" href="#async_hll_rcon.cli.Tracer.task_scheduled">task_scheduled</a></code></li>
+<li><code><a title="async_hll_rcon.cli.Tracer.task_spawned" href="#async_hll_rcon.cli.Tracer.task_spawned">task_spawned</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>
