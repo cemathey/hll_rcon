@@ -1032,7 +1032,7 @@ class AsyncRcon:
         return steam_id_64_lookup, player_name_lookup
 
     async def get_player_steam_ids(
-        self,
+        self, output: MutableSequence | None = None
     ) -> tuple[dict[str, PlayerNameType], dict[str, SteamIdType]]:
         """Get the player names and steam IDs of all the players currently connected to the game server
 
@@ -1046,7 +1046,12 @@ class AsyncRcon:
             )
 
         entries = self._from_hll_list(result)
-        return self._parse_get_player_steam_ids(entries)
+        validated_result = self._parse_get_player_steam_ids(entries)
+
+        if output is not None:
+            output.append(validated_result)
+
+        return validated_result
 
     @staticmethod
     def _parse_get_admin_ids(raw_admin_id: str) -> AdminIdType:
