@@ -27,6 +27,7 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from datetime import datetime, timedelta
+from typing import TypeAlias
 
 import pydantic
 
@@ -393,7 +394,29 @@ class MessagedPlayerLogType(pydantic.BaseModel):
     steam_id_64: str
     player_name: str
     message: str
-    time: LogTimeStampType</code></pre>
+    time: LogTimeStampType
+
+
+GameLogType: TypeAlias = list[
+    AdminCamLogType
+    | BanLogType
+    | ChatLogType
+    | ConnectLogType
+    | DisconnectLogType
+    | KickLogType
+    | KillLogType
+    | MatchEndLogType
+    | MatchStartLogType
+    | MessagedPlayerLogType
+    | TeamKillLogType
+    | TeamSwitchLogType
+    | VoteKickExpiredLogType
+    | VoteKickPassedLogType
+    | VoteKickPlayerVoteLogType
+    | VoteKickResultsLogType
+    | VoteKickStartedLogType
+    | None
+]</code></pre>
 </details>
 </section>
 <section>

@@ -23,6 +23,7 @@ from async_hll_rcon.typedefs import (
     ChatLogType,
     ConnectLogType,
     DisconnectLogType,
+    GameLogType,
     GameStateType,
     HighPingLimitType,
     IdleKickTimeType,
@@ -809,26 +810,7 @@ class AsyncRcon:
         minutes: int,
         filter: str | None = None,
         output: MutableSequence | None = None,
-    ) -> list[
-        AdminCamLogType
-        | BanLogType
-        | ChatLogType
-        | ConnectLogType
-        | DisconnectLogType
-        | KickLogType
-        | KillLogType
-        | MatchEndLogType
-        | MatchStartLogType
-        | MessagedPlayerLogType
-        | TeamKillLogType
-        | TeamSwitchLogType
-        | VoteKickExpiredLogType
-        | VoteKickPassedLogType
-        | VoteKickPlayerVoteLogType
-        | VoteKickResultsLogType
-        | VoteKickStartedLogType
-        | None
-    ]:
+    ) -> GameLogType:
         """Split and parse raw game logs into aware pydantic.BaseModel types"""
         async with self._get_connection() as conn:
             result = await conn.get_game_logs(minutes=minutes, filter=filter)

@@ -51,6 +51,7 @@ from async_hll_rcon.typedefs import (
     ChatLogType,
     ConnectLogType,
     DisconnectLogType,
+    GameLogType,
     GameStateType,
     HighPingLimitType,
     IdleKickTimeType,
@@ -837,26 +838,7 @@ class AsyncRcon:
         minutes: int,
         filter: str | None = None,
         output: MutableSequence | None = None,
-    ) -&gt; list[
-        AdminCamLogType
-        | BanLogType
-        | ChatLogType
-        | ConnectLogType
-        | DisconnectLogType
-        | KickLogType
-        | KillLogType
-        | MatchEndLogType
-        | MatchStartLogType
-        | MessagedPlayerLogType
-        | TeamKillLogType
-        | TeamSwitchLogType
-        | VoteKickExpiredLogType
-        | VoteKickPassedLogType
-        | VoteKickPlayerVoteLogType
-        | VoteKickResultsLogType
-        | VoteKickStartedLogType
-        | None
-    ]:
+    ) -&gt; GameLogType:
         &#34;&#34;&#34;Split and parse raw game logs into aware pydantic.BaseModel types&#34;&#34;&#34;
         async with self._get_connection() as conn:
             result = await conn.get_game_logs(minutes=minutes, filter=filter)
@@ -3058,26 +3040,7 @@ class AsyncRcon:
         minutes: int,
         filter: str | None = None,
         output: MutableSequence | None = None,
-    ) -&gt; list[
-        AdminCamLogType
-        | BanLogType
-        | ChatLogType
-        | ConnectLogType
-        | DisconnectLogType
-        | KickLogType
-        | KillLogType
-        | MatchEndLogType
-        | MatchStartLogType
-        | MessagedPlayerLogType
-        | TeamKillLogType
-        | TeamSwitchLogType
-        | VoteKickExpiredLogType
-        | VoteKickPassedLogType
-        | VoteKickPlayerVoteLogType
-        | VoteKickResultsLogType
-        | VoteKickStartedLogType
-        | None
-    ]:
+    ) -&gt; GameLogType:
         &#34;&#34;&#34;Split and parse raw game logs into aware pydantic.BaseModel types&#34;&#34;&#34;
         async with self._get_connection() as conn:
             result = await conn.get_game_logs(minutes=minutes, filter=filter)
@@ -5175,26 +5138,7 @@ there is no necessary correlation to the names the steam ID plays with on the ga
     minutes: int,
     filter: str | None = None,
     output: MutableSequence | None = None,
-) -&gt; list[
-    AdminCamLogType
-    | BanLogType
-    | ChatLogType
-    | ConnectLogType
-    | DisconnectLogType
-    | KickLogType
-    | KillLogType
-    | MatchEndLogType
-    | MatchStartLogType
-    | MessagedPlayerLogType
-    | TeamKillLogType
-    | TeamSwitchLogType
-    | VoteKickExpiredLogType
-    | VoteKickPassedLogType
-    | VoteKickPlayerVoteLogType
-    | VoteKickResultsLogType
-    | VoteKickStartedLogType
-    | None
-]:
+) -&gt; GameLogType:
     &#34;&#34;&#34;Split and parse raw game logs into aware pydantic.BaseModel types&#34;&#34;&#34;
     async with self._get_connection() as conn:
         result = await conn.get_game_logs(minutes=minutes, filter=filter)

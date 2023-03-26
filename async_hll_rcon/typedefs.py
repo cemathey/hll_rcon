@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import TypeAlias
 
 import pydantic
 
@@ -366,3 +367,25 @@ class MessagedPlayerLogType(pydantic.BaseModel):
     player_name: str
     message: str
     time: LogTimeStampType
+
+
+GameLogType: TypeAlias = list[
+    AdminCamLogType
+    | BanLogType
+    | ChatLogType
+    | ConnectLogType
+    | DisconnectLogType
+    | KickLogType
+    | KillLogType
+    | MatchEndLogType
+    | MatchStartLogType
+    | MessagedPlayerLogType
+    | TeamKillLogType
+    | TeamSwitchLogType
+    | VoteKickExpiredLogType
+    | VoteKickPassedLogType
+    | VoteKickPlayerVoteLogType
+    | VoteKickResultsLogType
+    | VoteKickStartedLogType
+    | None
+]
