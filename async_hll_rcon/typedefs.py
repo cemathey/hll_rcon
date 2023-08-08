@@ -113,7 +113,7 @@ class PermanentBanType(pydantic.BaseModel):
         return self.perma_ban_log_to_str(self)
 
 
-class VoteKickThresholdType:
+class VoteKickThresholdType(pydantic.BaseModel):
     player_count: int
     votes_required: int
 
