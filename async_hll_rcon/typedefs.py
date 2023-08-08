@@ -177,12 +177,6 @@ class MapRotationType(pydantic.BaseModel):
     maps: list[MapType]
 
 
-class AdminIdType(pydantic.BaseModel):
-    steam_id_64: str
-    role: str
-    name: str
-
-
 class PlayerNameType(pydantic.BaseModel):
     name: str
 
@@ -192,13 +186,19 @@ class SteamIdType(pydantic.BaseModel):
 
 
 class AdminGroupType(pydantic.BaseModel):
-    type: str
+    role: str
 
-    @pydantic.validator("type")
+    @pydantic.validator("role")
     def valid_admin_role(cls, v):
         if v not in constants.VALID_ADMIN_ROLES:
             raise ValueError(f"{v=} not in {constants.VALID_ADMIN_ROLES=}")
         return v
+
+
+class AdminIdType(pydantic.BaseModel):
+    steam_id_64: SteamIdType
+    role: AdminGroupType
+    name: PlayerNameType
 
 
 class VipIdType(pydantic.BaseModel):

@@ -1041,7 +1041,11 @@ class AsyncRcon:
     @staticmethod
     def _parse_get_admin_id(raw_admin_id: str) -> AdminIdType:
         steam_id_64, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
-        return AdminIdType(steam_id_64=steam_id_64, role=role, name=quoted_name[1:-1])
+        return AdminIdType(
+            steam_id_64=SteamIdType(steam_id_64=steam_id_64),
+            role=AdminGroupType(role=role),
+            name=PlayerNameType(name=quoted_name[1:-1]),
+        )
 
     async def get_admin_ids(
         self,
@@ -1076,7 +1080,7 @@ class AsyncRcon:
             )
 
         group_names = AsyncRcon._from_hll_list(result)
-        validated_result = [AdminGroupType(type=name) for name in group_names]
+        validated_result = [AdminGroupType(role=name) for name in group_names]
 
         if output is not None:
             output.append(validated_result)
