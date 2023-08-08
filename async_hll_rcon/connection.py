@@ -403,6 +403,11 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
+        # TODO: Fix if they ever remove the prefix nonsense
+        name = "/Game/Maps/" + name
+        if after_map_name:
+            after_map_name = "/Game/Maps/" + after_map_name
+
         content = f"RotAdd {name} {after_map_name or ''} {after_map_ordinal or ''}"
         return await self._send_to_game_server(content)
 
@@ -415,6 +420,10 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
+
+        # TODO: Fix if they ever remove the prefix nonsense
+        name = "/Game/Maps/" + name
+
         content = f"RotDel {name} {ordinal or ''}"
         return await self._send_to_game_server(content)
 
