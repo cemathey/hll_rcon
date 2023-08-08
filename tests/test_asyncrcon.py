@@ -3,10 +3,12 @@ from datetime import datetime, timedelta
 import pytest
 
 from async_hll_rcon import constants
-from async_hll_rcon.connection import HllConnection
 from async_hll_rcon.rcon import AsyncRcon
 from async_hll_rcon.typedefs import (
     BanLogType,
+    VipIdType,
+    AdminGroupType,
+    AdminIdType,
     ChatLogType,
     ConnectLogType,
     DisconnectLogType,
@@ -15,6 +17,7 @@ from async_hll_rcon.typedefs import (
     LogTimeStampType,
     MatchEndLogType,
     MatchStartLogType,
+    VoteKickThresholdType,
     PermanentBanType,
     PlayerInfoType,
     ScoreType,
@@ -22,17 +25,21 @@ from async_hll_rcon.typedefs import (
     TeamSwitchLogType,
     SquadType,
     TemporaryBanType,
+    ServerPlayerSlotsType,
+    GameStateType,
+    PlayerNameType,
+    SteamIdType,
 )
 
 
-@pytest.mark.parametrize("message, xor_key, expected", [("asdf", b"XOR", b"9<6>")])
-def test_xor_encode(message, xor_key, expected):
-    assert HllConnection._xor_encode(message, xor_key) == expected
-
-
-@pytest.mark.parametrize("cipher_text, xor_key, expected", [(b"9<6>", b"XOR", "asdf")])
-def test_xor_decode(cipher_text, xor_key, expected):
-    assert HllConnection._xor_decode(cipher_text, xor_key) == expected
+@pytest.mark.parametrize(
+    "items, expected",
+    [
+        (("some", "different", "words"), "some,different,words"),
+    ],
+)
+def test_to_hll_list(items, expected):
+    assert AsyncRcon._to_hll_list(items=items) == expected
 
 
 @pytest.mark.parametrize(
@@ -52,138 +59,43 @@ def test_xor_decode(cipher_text, xor_key, expected):
         ),
     ],
 )
-def test_list_conversion(raw, expected):
+def test_from_hll_list(raw, expected):
     assert AsyncRcon._from_hll_list(raw) == expected
 
 
 @pytest.mark.parametrize(
-    "raw, expected",
+    "slots, expected",
     [
-        (
-            "2021.12.09-16.40.08",
-            datetime(year=2021, month=12, day=9, hour=16, minute=40, second=8),
-        )
+        ("0/100", ServerPlayerSlotsType(current_players=0, max_players=100)),
     ],
 )
-def test_ban_list_timestamp_conversion(raw, expected):
-    assert AsyncRcon._parse_ban_log_timestamp(raw) == expected
+def test_parse_get_current_max_player_slots(slots, expected):
+    assert AsyncRcon._parse_get_current_max_player_slots(slots) == expected
 
 
 @pytest.mark.parametrize(
-    "raw, expected",
+    "gamestate, expected",
     [
         (
-            '76561199023123456 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TemporaryBanType(
-                steam_id_64="76561199023123456",
-                player_name="(WTH) Abu",
-                duration_hours=2,
-                timestamp=datetime(
-                    year=2021, month=12, day=9, hour=16, minute=40, second=8
-                ),
-                reason="Being a troll",
-                admin="Some Admin Name",
-            ),
-        ),
-        (
-            '76561199023123456 : banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TemporaryBanType(
-                steam_id_64="76561199023123456",
-                player_name=None,
-                duration_hours=2,
-                timestamp=datetime(
-                    year=2021, month=12, day=9, hour=16, minute=40, second=8
-                ),
-                reason="Being a troll",
-                admin="Some Admin Name",
+            """Players: Allied: 46 - Axis: 46
+Score: Allied: 4 - Axis: 1
+Remaining Time: 0:25:23
+Map: carentan_offensive_ger
+Next Map: hurtgenforest_warfare_V2""",
+            GameStateType(
+                allied_players=46,
+                axis_players=46,
+                allied_score=4,
+                axis_score=1,
+                remaining_time=timedelta(hours=0, minutes=25, seconds=23),
+                current_map="carentan_offensive_ger",
+                next_map="hurtgenforest_warfare_V2",
             ),
         ),
     ],
 )
-def test_temp_ban_parsing(raw, expected):
-    assert AsyncRcon._parse_temp_ban_log(raw) == expected
-
-
-@pytest.mark.parametrize(
-    "raw, expected",
-    [
-        (
-            '76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
-            PermanentBanType(
-                steam_id_64="76561197975123456",
-                player_name="Georgij Zhukov Sovie",
-                timestamp=datetime(
-                    year=2022, month=12, day=6, hour=16, minute=27, second=14
-                ),
-                reason="Racism",
-                admin="BLACKLIST: NoodleArms",
-            ),
-        ),
-        (
-            '76561197975123456 : banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
-            PermanentBanType(
-                steam_id_64="76561197975123456",
-                player_name=None,
-                timestamp=datetime(
-                    year=2022, month=12, day=6, hour=16, minute=27, second=14
-                ),
-                reason="Racism",
-                admin="BLACKLIST: NoodleArms",
-            ),
-        ),
-    ],
-)
-def test_perma_ban_parsing(raw, expected):
-    assert AsyncRcon._parse_perma_ban_log(raw) == expected
-
-
-@pytest.mark.parametrize(
-    "raw, expected", [("1,2,3,4", "1,2,3,4"), ([(0, 1), (2, 3)], "0,1,2,3")]
-)
-def test_convert_vote_kick_thresholds(raw, expected):
-    assert AsyncRcon._convert_vote_kick_thresholds(raw) == expected
-
-
-@pytest.mark.parametrize(
-    "raw, expected",
-    [("1,2,3", ValueError), ((0,), ValueError), ("", ValueError), (None, ValueError)],
-)
-def test_convert_vote_kick_thresholds_exceptions(raw, expected):
-    with pytest.raises(expected):
-        AsyncRcon._convert_vote_kick_thresholds(raw)
-
-
-@pytest.mark.parametrize(
-    "raw, expected",
-    [
-        (
-            """Name: NoodleArms
-steamID64: 76561198004123456
-Team: Axis
-Role: Assault
-Unit: 8 - ITEM
-Loadout: Standard Issue
-Kills: 2 - Deaths: 2
-Score: C 18, O 0, D 80, S 0
-Level: 14
-""",
-            PlayerInfoType(
-                player_name="NoodleArms",
-                steam_id_64="76561198004123456",
-                team="Axis",
-                unit=SquadType(unit_id=8, unit_name="ITEM"),
-                loadout="Standard Issue",
-                role="Assault",
-                score=ScoreType(
-                    kills=2, deaths=2, combat=18, offensive=0, defensive=80, support=0
-                ),
-                level=14,
-            ),
-        )
-    ],
-)
-def test_parse_player_info(raw, expected):
-    assert AsyncRcon._parse_player_info(raw) == expected
+def test_parse_gamestate(gamestate, expected):
+    assert AsyncRcon._parse_gamestate(gamestate) == expected
 
 
 @pytest.mark.parametrize(
@@ -434,3 +346,246 @@ def test_absolute_time_to_datetime(raw, expected):
 )
 def test_parse_game_log(raw_log, relative_time, absolute_time, expected):
     assert AsyncRcon._parse_game_log(raw_log, relative_time, absolute_time) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_logs, expected",
+    [
+        (
+            """[53.5 sec (1691524093)] KILL: JJ(Axis/76561199015319814) -> AceOfSpadess(Allies/76561197997173327) with MP40
+[50.5 sec (1691524096)] TEAMSWITCH BakedBoi (None > Axis)
+[49.1 sec (1691524097)] CHAT[Team][FreedomFries(Allies/76561198037148935)]: enemy garri destroyed B7k3""",
+            (
+                (
+                    "KILL: JJ(Axis/76561199015319814) -> AceOfSpadess(Allies/76561197997173327) with MP40",
+                    "53.5 sec",
+                    "1691524093",
+                ),
+                ("TEAMSWITCH BakedBoi (None > Axis)", "50.5 sec", "1691524096"),
+                (
+                    "CHAT[Team][FreedomFries(Allies/76561198037148935)]: enemy garri destroyed B7k3",
+                    "49.1 sec",
+                    "1691524097",
+                ),
+            ),
+        )
+    ],
+)
+def test_split_raw_log_lines(raw_logs, expected):
+    assert tuple(AsyncRcon.split_raw_log_lines(raw_logs)) == expected
+
+
+@pytest.mark.parametrize(
+    "name_and_ids, expected",
+    [
+        (
+            [
+                "Thunder_Chief : 76561198053381234",
+                "Ispanky : 76561197984134321",
+                "KidneyCarver : 76561197970731243",
+            ],
+            (
+                {
+                    "76561198053381234": PlayerNameType(name="Thunder_Chief"),
+                    "76561197984134321": PlayerNameType(name="Ispanky"),
+                    "76561197970731243": PlayerNameType(name="KidneyCarver"),
+                },
+                {
+                    "Thunder_Chief": SteamIdType(steam_id_64="76561198053381234"),
+                    "Ispanky": SteamIdType(steam_id_64="76561197984134321"),
+                    "KidneyCarver": SteamIdType(steam_id_64="76561197970731243"),
+                },
+            ),
+        )
+    ],
+)
+def test_parse_get_player_steam_ids(name_and_ids, expected):
+    assert AsyncRcon._parse_get_player_steam_ids(name_and_ids) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_admin_id, expected",
+    [
+        (
+            '76561198075923228 spectator "Grytzen"',
+            AdminIdType(
+                steam_id_64=SteamIdType(steam_id_64="76561198075923228"),
+                role=AdminGroupType(role="spectator"),
+                name=PlayerNameType(name="Grytzen"),
+            ),
+        ),
+    ],
+)
+def test_parse_get_admin_ids(raw_admin_id, expected):
+    assert AsyncRcon._parse_get_admin_id(raw_admin_id) == expected
+
+
+@pytest.mark.parametrize(
+    "vip_id, expected",
+    [
+        (
+            '76561198042846962 "+Cronus+[DIXX] - (admin)"',
+            VipIdType(
+                steam_id_64=SteamIdType(steam_id_64="76561198042846962"),
+                name="+Cronus+[DIXX] - (admin)",
+            ),
+        ),
+        (
+            '76561198214019848 "- RazBora - (BEER)"',
+            VipIdType(
+                steam_id_64=SteamIdType(steam_id_64="76561198214019848"),
+                name="- RazBora - (BEER)",
+            ),
+        ),
+    ],
+)
+def test_parse_get_vip_ids(vip_id, expected):
+    assert AsyncRcon._parse_get_vip_id(vip_id) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            """Name: NoodleArms
+steamID64: 76561198004123456
+Team: Axis
+Role: Assault
+Unit: 8 - ITEM
+Loadout: Standard Issue
+Kills: 2 - Deaths: 2
+Score: C 18, O 0, D 80, S 0
+Level: 14
+""",
+            PlayerInfoType(
+                player_name="NoodleArms",
+                steam_id_64="76561198004123456",
+                team="Axis",
+                unit=SquadType(unit_id=8, unit_name="ITEM"),
+                loadout="Standard Issue",
+                role="Assault",
+                score=ScoreType(
+                    kills=2, deaths=2, combat=18, offensive=0, defensive=80, support=0
+                ),
+                level=14,
+            ),
+        )
+    ],
+)
+def test_parse_player_info(raw, expected):
+    assert AsyncRcon._parse_player_info(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            "2021.12.09-16.40.08",
+            datetime(year=2021, month=12, day=9, hour=16, minute=40, second=8),
+        )
+    ],
+)
+def test_ban_list_timestamp_conversion(raw, expected):
+    assert AsyncRcon._parse_ban_log_timestamp(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            '76561199023123456 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
+            TemporaryBanType(
+                steam_id_64="76561199023123456",
+                player_name="(WTH) Abu",
+                duration_hours=2,
+                timestamp=datetime(
+                    year=2021, month=12, day=9, hour=16, minute=40, second=8
+                ),
+                reason="Being a troll",
+                admin="Some Admin Name",
+            ),
+        ),
+        (
+            '76561199023123456 : banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
+            TemporaryBanType(
+                steam_id_64="76561199023123456",
+                player_name=None,
+                duration_hours=2,
+                timestamp=datetime(
+                    year=2021, month=12, day=9, hour=16, minute=40, second=8
+                ),
+                reason="Being a troll",
+                admin="Some Admin Name",
+            ),
+        ),
+    ],
+)
+def test_temp_ban_parsing(raw, expected):
+    assert AsyncRcon._parse_temp_ban_log(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (
+            '76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
+            PermanentBanType(
+                steam_id_64="76561197975123456",
+                player_name="Georgij Zhukov Sovie",
+                timestamp=datetime(
+                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                ),
+                reason="Racism",
+                admin="BLACKLIST: NoodleArms",
+            ),
+        ),
+        (
+            '76561197975123456 : banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
+            PermanentBanType(
+                steam_id_64="76561197975123456",
+                player_name=None,
+                timestamp=datetime(
+                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                ),
+                reason="Racism",
+                admin="BLACKLIST: NoodleArms",
+            ),
+        ),
+    ],
+)
+def test_perma_ban_parsing(raw, expected):
+    assert AsyncRcon._parse_perma_ban_log(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_thresholds, expected",
+    [
+        (
+            "0,1,10,5,25,12,50,20",
+            [
+                VoteKickThresholdType(player_count=0, votes_required=1),
+                VoteKickThresholdType(player_count=10, votes_required=5),
+                VoteKickThresholdType(player_count=25, votes_required=12),
+                VoteKickThresholdType(player_count=50, votes_required=20),
+            ],
+        )
+    ],
+)
+def test_parse_vote_kick_threshold(raw_thresholds, expected):
+    assert AsyncRcon._parse_vote_kick_thresholds(raw_thresholds) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected", [("1,2,3,4", "1,2,3,4"), ([(0, 1), (2, 3)], "0,1,2,3")]
+)
+def test_convert_vote_kick_thresholds(raw, expected):
+    assert AsyncRcon._convert_vote_kick_thresholds(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [("1,2,3", ValueError), ((0,), ValueError), ("", ValueError), (None, ValueError)],
+)
+def test_convert_vote_kick_thresholds_exceptions(raw, expected):
+    with pytest.raises(expected):
+        AsyncRcon._convert_vote_kick_thresholds(raw)
