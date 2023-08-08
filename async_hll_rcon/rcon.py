@@ -1143,7 +1143,9 @@ class AsyncRcon:
     @staticmethod
     def _parse_get_vip_id(vip_id: str) -> VipIdType:
         steam_id_64, quoted_name = vip_id.split(" ", maxsplit=1)
-        return VipIdType(steam_id_64=steam_id_64, name=quoted_name[1:-1])
+        return VipIdType(
+            steam_id_64=SteamIdType(steam_id_64=steam_id_64), name=quoted_name[1:-1]
+        )
 
     async def get_vip_ids(
         self,

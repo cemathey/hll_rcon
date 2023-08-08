@@ -202,7 +202,7 @@ class AdminIdType(pydantic.BaseModel):
 
 
 class VipIdType(pydantic.BaseModel):
-    steam_id_64: str
+    steam_id_64: SteamIdType
     name: str
 
 
