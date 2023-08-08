@@ -1039,7 +1039,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_admin_ids(raw_admin_id: str) -> AdminIdType:
+    def _parse_get_admin_id(raw_admin_id: str) -> AdminIdType:
         steam_id_64, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
         return AdminIdType(steam_id_64=steam_id_64, role=role, name=quoted_name[1:-1])
 
@@ -1056,7 +1056,7 @@ class AsyncRcon:
 
         admin_ids = self._from_hll_list(result)
         validated_result = [
-            self._parse_get_admin_ids(admin_id) for admin_id in admin_ids
+            self._parse_get_admin_id(admin_id) for admin_id in admin_ids
         ]
 
         if output is not None:
