@@ -1,7 +1,7 @@
 from loguru import logger
 
 from async_hll_rcon import constants
-from async_hll_rcon.typedefs import FailedGameServerCommand, FailedGameServerResponse
+from async_hll_rcon.exceptions import FailedGameServerCommand, FailedGameServerResponse
 
 
 def _success_fail_validator(result: str) -> bool:

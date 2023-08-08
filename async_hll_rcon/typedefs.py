@@ -6,14 +6,6 @@ import pydantic
 from async_hll_rcon import constants
 
 
-class FailedGameServerResponse(Exception):
-    """Raised when a game server command fails"""
-
-
-class FailedGameServerCommand(Exception):
-    """Raised when out of reattempts"""
-
-
 class ServerNameType(pydantic.BaseModel):
     name: str
 
