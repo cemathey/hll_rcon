@@ -7,7 +7,10 @@ import trio
 from loguru import logger
 
 from async_hll_rcon import constants
-from async_hll_rcon.exceptions import FailedGameServerCommand, FailedGameServerResponse
+from async_hll_rcon.exceptions import (
+    FailedGameServerCommandError,
+    FailedGameServerResponseError,
+)
 from async_hll_rcon.validators import (
     _gamestate_validator,
     _on_off_validator,
@@ -192,14 +195,14 @@ class HllConnection:
                         validator=response_validator, **kwargs
                     )
                     break
-            except (FailedGameServerResponse, trio.TooSlowError) as e:
+            except (FailedGameServerResponseError, trio.TooSlowError) as e:
                 logger.error(
                     f"{id(self)} {content=} {len(content)=} Failed attempt #{_+1}/{retry_attempts} {e}"
                 )
                 continue
 
         if not result:
-            raise FailedGameServerCommand
+            raise FailedGameServerCommandError
 
         logger.warning(f"received {len(result)=} bytes")
 
@@ -215,9 +218,12 @@ class HllConnection:
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
         content = f"Login {self.password}"
-        return await self._send_to_game_server(
-            content, response_validator=_success_fail_validator
-        )
+        try:
+            return await self._send_to_game_server(
+                content, response_validator=_success_fail_validator
+            )
+        except FailedGameServerResponseError:
+            raise
 
     async def get_server_name(self) -> str:
         """Return the server name as defined in the game server `Server.ini` file"""

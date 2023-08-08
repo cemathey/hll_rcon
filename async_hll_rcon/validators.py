@@ -1,7 +1,10 @@
 from loguru import logger
 
 from async_hll_rcon import constants
-from async_hll_rcon.exceptions import FailedGameServerCommand, FailedGameServerResponse
+from async_hll_rcon.exceptions import (
+    FailedGameServerCommandError,
+    FailedGameServerResponseError,
+)
 
 
 def _success_fail_validator(result: str) -> bool:
@@ -41,8 +44,8 @@ def _player_info_validator(
         return True
 
     if player_info == "":
-        logger.error(f"{FailedGameServerResponse} for `{player_name=}`")
-        raise FailedGameServerResponse
+        logger.error(f"{FailedGameServerResponseError} for `{player_name=}`")
+        raise FailedGameServerResponseError
 
     is_complete = True
 

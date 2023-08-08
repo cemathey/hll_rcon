@@ -1,6 +1,6 @@
-class FailedGameServerResponse(Exception):
+class FailedGameServerResponseError(Exception):
     """Raised when a game server command fails"""
 
 
-class FailedGameServerCommand(Exception):
+class FailedGameServerCommandError(Exception):
     """Raised when out of reattempts"""
