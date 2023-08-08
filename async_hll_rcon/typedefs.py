@@ -317,10 +317,15 @@ class MatchEndLogType(pydantic.BaseModel):
     time: LogTimeStampType
 
 
-class AdminCamLogType(pydantic.BaseModel):
+class EnteredAdminCamLogType(pydantic.BaseModel):
     steam_id_64: str
     player_name: str
-    kind: str
+    time: LogTimeStampType
+
+
+class ExitedAdminCamLogType(pydantic.BaseModel):
+    steam_id_64: str
+    player_name: str
     time: LogTimeStampType
 
 
@@ -370,11 +375,12 @@ class MessagedPlayerLogType(pydantic.BaseModel):
 
 
 GameLogType: TypeAlias = list[
-    AdminCamLogType
-    | BanLogType
+    BanLogType
     | ChatLogType
     | ConnectLogType
     | DisconnectLogType
+    | EnteredAdminCamLogType
+    | ExitedAdminCamLogType
     | KickLogType
     | KillLogType
     | MatchEndLogType

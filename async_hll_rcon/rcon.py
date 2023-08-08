@@ -12,7 +12,6 @@ from loguru import logger
 from async_hll_rcon import constants
 from async_hll_rcon.connection import HllConnection
 from async_hll_rcon.typedefs import (
-    AdminCamLogType,
     AdminGroupType,
     AdminIdType,
     AutoBalanceStateType,
@@ -23,6 +22,8 @@ from async_hll_rcon.typedefs import (
     ChatLogType,
     ConnectLogType,
     DisconnectLogType,
+    EnteredAdminCamLogType,
+    ExitedAdminCamLogType,
     GameLogType,
     GameStateType,
     HighPingLimitType,
@@ -500,11 +501,12 @@ class AsyncRcon:
     def _parse_game_log(
         raw_log: str, relative_time: str, absolute_time: str
     ) -> (
-        AdminCamLogType
-        | BanLogType
+        BanLogType
         | ChatLogType
         | ConnectLogType
         | DisconnectLogType
+        | EnteredAdminCamLogType
+        | ExitedAdminCamLogType
         | KickLogType
         | KillLogType
         | MatchEndLogType
@@ -708,18 +710,19 @@ class AsyncRcon:
                 player_name, steam_id_64, entered_exited = match.groups()
 
                 if entered_exited == "Entered":
-                    kind = constants.ADMIN_CAM_ENTERED
+                    return EnteredAdminCamLogType(
+                        steam_id_64=steam_id_64,
+                        player_name=player_name,
+                        time=time,
+                    )
                 elif entered_exited == "Left":
-                    kind = constants.ADMIN_CAM_LEFT
+                    return ExitedAdminCamLogType(
+                        steam_id_64=steam_id_64,
+                        player_name=player_name,
+                        time=time,
+                    )
                 else:
                     raise ValueError(f"invalid {entered_exited=} {raw_log=}")
-
-                return AdminCamLogType(
-                    steam_id_64=steam_id_64,
-                    player_name=player_name,
-                    kind=kind,
-                    time=time,
-                )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("VOTESYS"):
