@@ -1141,7 +1141,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_vip_ids(vip_id: str) -> VipIdType:
+    def _parse_get_vip_id(vip_id: str) -> VipIdType:
         steam_id_64, quoted_name = vip_id.split(" ", maxsplit=1)
         return VipIdType(steam_id_64=steam_id_64, name=quoted_name[1:-1])
 
@@ -1157,7 +1157,7 @@ class AsyncRcon:
             )
 
         vip_ids = AsyncRcon._from_hll_list(result)
-        validated_result = [self._parse_get_vip_ids(vip_id) for vip_id in vip_ids]
+        validated_result = [self._parse_get_vip_id(vip_id) for vip_id in vip_ids]
 
         if output is not None:
             output.append(validated_result)
