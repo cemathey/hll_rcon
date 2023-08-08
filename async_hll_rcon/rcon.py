@@ -127,7 +127,7 @@ class AsyncRcon:
 
     # Miscellaneous parsing patterns
     _gamestate_pattern = re.compile(
-        r"Players: Allied: (\d+) - Axis: (\d+)\nScore: Allied: (\d) - Axis: (\d)\nRemaining Time: (\d+):(\d+):(\d+)\nMap: (.*)\nNext Map:(.*)"
+        r"Players: Allied: (\d+) - Axis: (\d+)\nScore: Allied: (\d) - Axis: (\d)\nRemaining Time: (\d+):(\d+):(\d+)\nMap: (.*)\nNext Map: (.*)"
     )
 
     def __init__(
