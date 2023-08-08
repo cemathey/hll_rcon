@@ -990,7 +990,7 @@ class HllConnection:
             content, response_validator=_success_fail_validator
         )
 
-    async def clear_vote_kick_threshold(self) -> str:
+    async def clear_vote_kick_thresholds(self) -> str:
         """Clear vote kick threshold pairs
 
         Removes all the threshold pairs, the game server does not appear to have defaults

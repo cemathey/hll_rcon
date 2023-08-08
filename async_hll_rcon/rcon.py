@@ -2167,7 +2167,7 @@ class AsyncRcon:
 
         return validated_result
 
-    async def clear_vote_kick_threshold(
+    async def clear_vote_kick_thresholds(
         self,
         output: MutableSequence | None = None,
     ) -> bool:
@@ -2176,7 +2176,7 @@ class AsyncRcon:
         Removes all the threshold pairs, the game server does not appear to have defaults
         """
         async with self._get_connection() as conn:
-            result = await conn.clear_vote_kick_threshold()
+            result = await conn.clear_vote_kick_thresholds()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
