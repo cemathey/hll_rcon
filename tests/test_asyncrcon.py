@@ -20,6 +20,7 @@ from async_hll_rcon.typedefs import (
     ScoreType,
     TeamKillLogType,
     TeamSwitchLogType,
+    SquadType,
     TemporaryBanType,
 )
 
@@ -158,21 +159,25 @@ def test_convert_vote_kick_thresholds_exceptions(raw, expected):
         (
             """Name: NoodleArms
 steamID64: 76561198004123456
-Team: None
-Role: Rifleman
-Kills: 0 - Deaths: 0
-Score: C 0, O 0, D 0, S 0
-Level: 238
+Team: Axis
+Role: Assault
+Unit: 8 - ITEM
+Loadout: Standard Issue
+Kills: 2 - Deaths: 2
+Score: C 18, O 0, D 80, S 0
+Level: 14
 """,
             PlayerInfoType(
                 player_name="NoodleArms",
                 steam_id_64="76561198004123456",
-                team=None,
-                role="Rifleman",
+                team="Axis",
+                unit=SquadType(unit_id=8, unit_name="ITEM"),
+                loadout="Standard Issue",
+                role="Assault",
                 score=ScoreType(
-                    kills=0, deaths=0, combat=0, offensive=0, defensive=0, support=0
+                    kills=2, deaths=2, combat=18, offensive=0, defensive=80, support=0
                 ),
-                level=238,
+                level=14,
             ),
         )
     ],

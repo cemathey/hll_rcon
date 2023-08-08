@@ -1198,7 +1198,7 @@ class AsyncRcon:
                 left, unit_name = line.split(" - ")
                 _, unit_id = left.split("Unit: ")
                 unit = SquadType(unit_id=int(unit_id), unit_name=unit_name)
-            elif line.startswith("Unit"):
+            elif line.startswith("Loadout"):
                 _, loadout = line.split("Loadout: ")
             elif line.startswith("Kills"):
                 left, right = line.split(" - ")
@@ -1240,9 +1240,9 @@ class AsyncRcon:
             player_name=player_name,  # type: ignore
             steam_id_64=steam_id_64,  # type: ignore
             team=team,
-            role=role,  # type: ignore
             unit=unit,
             loadout=loadout,
+            role=role,  # type: ignore
             score=processed_score,
             level=int(level),  # type: ignore
         )
