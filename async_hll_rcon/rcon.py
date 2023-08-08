@@ -2064,7 +2064,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_vote_kick_threshold(
+    def _parse_vote_kick_thresholds(
         raw_thresholds: str,
     ) -> list[VoteKickThresholdType]:
         values = raw_thresholds.split(",")
@@ -2087,7 +2087,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = self._parse_vote_kick_threshold(result)
+            validated_result = self._parse_vote_kick_thresholds(result)
             if output is not None:
                 output.append(validated_result)
             return validated_result
