@@ -53,8 +53,8 @@ from async_hll_rcon.typedefs import (
     TeamSwitchLogType,
     TemporaryBanType,
     VipIdType,
+    VoteKickCompletedStatusType,
     VoteKickExpiredLogType,
-    VoteKickPassedLogType,
     VoteKickPlayerVoteLogType,
     VoteKickResultsLogType,
     VoteKickStartedLogType,
@@ -515,7 +515,7 @@ class AsyncRcon:
         | TeamKillLogType
         | TeamSwitchLogType
         | VoteKickExpiredLogType
-        | VoteKickPassedLogType
+        | VoteKickCompletedStatusType
         | VoteKickPlayerVoteLogType
         | VoteKickResultsLogType
         | VoteKickStartedLogType
@@ -736,7 +736,7 @@ class AsyncRcon:
                 )
             elif match := re.match(AsyncRcon._vote_completed_pattern, raw_log):
                 vote_id, vote_result = match.groups()
-                return VoteKickPassedLogType(
+                return VoteKickCompletedStatusType(
                     vote_result=vote_result, vote_id=int(vote_id), time=time
                 )
             elif match := re.match(AsyncRcon._vote_expired_pattern, raw_log):
