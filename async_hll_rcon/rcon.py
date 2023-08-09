@@ -2,7 +2,7 @@ import inspect
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import AsyncGenerator, Callable, Generator, Iterable, MutableSequence
+from typing import AsyncGenerator, Generator, Iterable, MutableSequence
 from warnings import warn
 
 import trio

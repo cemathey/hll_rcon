@@ -2,7 +2,6 @@ from loguru import logger
 
 from async_hll_rcon import constants
 from async_hll_rcon.exceptions import (
-    FailedGameServerCommandError,
     FailedGameServerResponseError,
 )
 
