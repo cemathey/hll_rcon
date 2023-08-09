@@ -19,6 +19,7 @@ from async_hll_rcon.typedefs import (
     MatchStartLogType,
     VoteKickThresholdType,
     PermanentBanType,
+    BanLogBanType,
     PlayerInfoType,
     ScoreType,
     TeamKillLogType,
@@ -251,7 +252,7 @@ def test_absolute_time_to_datetime(raw, expected):
             "1678160118",
             BanLogType(
                 player_name="Scab Bucket",
-                ban_type=constants.TEMPORARY_BAN,
+                ban_type=BanLogBanType.TEMPORARY_BAN,
                 ban_duration_hours=2,
                 reason="Toxicity in command chat",
                 time=LogTimeStampType(
