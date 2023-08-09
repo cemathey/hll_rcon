@@ -3,6 +3,28 @@ import pytest
 from async_hll_rcon.connection import HllConnection, _player_info_validator
 
 
+@pytest.mark.parametrize("timeout, expected", [(1.0, 1.0)])
+def test_validate_timeout(timeout, expected):
+    assert HllConnection._validate_timeout(timeout) == expected
+
+
+@pytest.mark.parametrize("timeout, expected", [("a", ValueError)])
+def test_validate_timeout_exceptions(timeout, expected):
+    with pytest.raises(expected):
+        assert HllConnection._validate_timeout(timeout)
+
+
+@pytest.mark.parametrize("buffer_size, expected", [(1, 1), ("1", 1), (None, None)])
+def test_validate_max_buffer_size(buffer_size, expected):
+    assert HllConnection._validate_max_buffer_size(buffer_size) == expected
+
+
+@pytest.mark.parametrize("buffer_size, expected", [("a", ValueError)])
+def test_validate_max_buffer_size_exceptions(buffer_size, expected):
+    with pytest.raises(expected):
+        assert HllConnection._validate_max_buffer_size(buffer_size)
+
+
 @pytest.mark.parametrize("message, xor_key, expected", [("asdf", b"XOR", b"9<6>")])
 def test_xor_encode(message, xor_key, expected):
     assert HllConnection._xor_encode(message, xor_key) == expected

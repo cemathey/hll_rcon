@@ -41,17 +41,40 @@ class HllConnection:
         self._connection: trio.SocketStream | None = None
         self.logged_in = False
 
-    def _validate_timeout(self, value: float) -> None:
+    @staticmethod
+    def _validate_timeout(value: float) -> float:
         """Check that value is float like and positive for TCP timeouts"""
         try:
             float(value)
         except ValueError:
             raise ValueError(
-                f"`receive_timeout={value}` must be a float or castable to a float"
+                f"`timeout={value}` must be a float or castable to a float"
             )
 
+        value = float(value)
         if value < 0:
-            raise ValueError(f"`receive_timeout={value}` must be >= 0")
+            raise ValueError(f"`timeout={value}` must be >= 0")
+
+        return value
+
+    @staticmethod
+    def _validate_max_buffer_size(value: int | None) -> int | None:
+        """Check that value is int like and positive for socket receive buffer sizes"""
+        if value is None:
+            return value
+
+        try:
+            int(value)
+        except ValueError:
+            raise ValueError(
+                f"`max_buffer_size={value}` must be an int, castable to int or None"
+            )
+
+        value = int(value)
+        if value < 0:
+            raise ValueError(f"`max_buffer_size={value}` must be >= 0 or None")
+
+        return value
 
     @property
     def receive_timeout(self) -> float:
@@ -61,7 +84,7 @@ class HllConnection:
     def receive_timeout(self, value: float) -> None:
         self._validate_timeout(value)
 
-        self._receive_timeout = value
+        self._receive_timeout = float(value)
 
     @property
     def tcp_timeout(self) -> float:
@@ -71,7 +94,15 @@ class HllConnection:
     def tcp_timeout(self, value: float) -> None:
         self._validate_timeout(value)
 
-        self._tcp_timeout = value
+        self._tcp_timeout = float(value)
+
+    @property
+    def max_buffer_size(self) -> int | None:
+        return self._max_buffer_size
+
+    @max_buffer_size.setter
+    def max_buffer_size(self, value: int | None) -> None:
+        self._max_buffer_size = self._validate_max_buffer_size(value)
 
     @property
     def connection(self) -> trio.SocketStream:
