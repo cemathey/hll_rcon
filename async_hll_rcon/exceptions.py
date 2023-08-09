@@ -4,3 +4,7 @@ class FailedGameServerResponseError(Exception):
 
 class FailedGameServerCommandError(Exception):
     """Raised when out of reattempts"""
+
+
+class AuthenticationError(Exception):
+    """Raised when the game server fails for a login"""
