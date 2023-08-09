@@ -921,6 +921,9 @@ class AsyncRcon:
             constants.SUCCESS_RESPONSE,
             constants.FAIL_MAP_REMOVAL_RESPONSE,
         ):
+            logger.error(
+                f"add_map_to_rotation({name=} {after_map_name=} {after_map_ordinal=})=result"
+            )
             raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             validated_result = result == constants.SUCCESS_RESPONSE
