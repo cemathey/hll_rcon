@@ -1344,6 +1344,7 @@ class AsyncRcon:
             76561199023367826 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"
         """
         # TODO: Account for any other optional fields
+        # I do not remember what fields are optional?
         if match := re.match(AsyncRcon._temp_ban_log_pattern, raw_ban):
             (
                 steam_id_64,
@@ -1420,6 +1421,7 @@ class AsyncRcon:
             76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"
         """
         # TODO: Account for any other optional fields
+        # I do not remember what fields are optional?
         if match := re.match(AsyncRcon._perma_ban_log_pattern, raw_ban):
             (
                 steam_id_64,
@@ -1686,9 +1688,10 @@ class AsyncRcon:
             ban_log: Must match the HLL ban log format returned from get_temp_bans
         """
 
-        # TODO: Handle invalid ban types?
-        # if isinstance(ban_log, InvalidTempBanType):
-        #     raise ValueError(f"Can'")
+        if isinstance(ban_log, InvalidTempBanType):
+            logger.warning(
+                f"{ban_log=} is an InvalidTempBanType, attempting unban regardless"
+            )
 
         if isinstance(ban_log, str):
             self._parse_temp_ban_log(ban_log)
