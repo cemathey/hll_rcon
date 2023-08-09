@@ -29,12 +29,14 @@ class HllConnection:
         password: str,
         receive_timeout: int = constants.TCP_TIMEOUT_READ,
         tcp_timeout: int = constants.TCP_TIMEOUT,
+        max_buffer_size: int | None = constants.CHUNK_SIZE,
     ) -> None:
         self.ip_addr = ip_addr
         self.port = int(port)
         self.password = password
         self.receive_timeout = receive_timeout
         self.tcp_timeout = tcp_timeout
+        self.max_buffer_size = max_buffer_size
         self.xor_key: bytes
         self._connection: trio.SocketStream | None = None
         self.logged_in = False
@@ -131,8 +133,6 @@ class HllConnection:
 
     async def _receive_from_game_server(
         self,
-        max_bytes: int
-        | None = constants.CHUNK_SIZE,  # TODO allow configuration for this
         validator: Callable | None = None,
         **kwargs,
     ) -> bytes:
@@ -148,7 +148,9 @@ class HllConnection:
         while True:
             try:
                 with trio.fail_after(self.receive_timeout):
-                    buffer += await self.connection.receive_some(max_bytes)
+                    buffer += await self.connection.receive_some(
+                        max_bytes=self.max_buffer_size
+                    )
 
                     # The game server does not send back any sort of EOF marker
                     # so there is no way to know when we're actually done, some
