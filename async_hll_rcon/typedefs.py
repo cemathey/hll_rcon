@@ -218,7 +218,7 @@ class AdminGroupType(pydantic.BaseModel):
 
     role: str
 
-    @pydantic.validator("role")
+    @pydantic.field_validator("role")
     def valid_admin_role(cls, v):
         if v not in constants.VALID_ADMIN_ROLES:
             raise ValueError(f"{v=} not in {constants.VALID_ADMIN_ROLES=}")

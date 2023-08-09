@@ -10,8 +10,8 @@ packages = [{ include = "async_hll_rcon" }]
 python = "^3.11"
 trio = "^0.22.0"
 loguru = "^0.6.0"
-pydantic = "^1.10.5"
 python-dateutil = "^2.8.2"
+pydantic = "^2.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
