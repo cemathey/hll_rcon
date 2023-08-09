@@ -2164,8 +2164,8 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        # TODO: report error message from the game server
         if result not in (constants.SUCCESS_RESPONSE, constants.FAIL_RESPONSE):
+            logger.error(f"set_vote_kick_thresholds({validated_thresholds})={result}")
             raise ValueError(constants.INVALID_GAME_SERVER_RESPONSE_ERROR_MSG)
         else:
             validated_result = result == constants.SUCCESS_RESPONSE
