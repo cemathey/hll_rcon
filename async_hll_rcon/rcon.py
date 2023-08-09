@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import AsyncGenerator, Generator, Iterable, MutableSequence
 from warnings import warn
 
+import pydantic
 import trio
 from dateutil import parser
 from loguru import logger
@@ -61,6 +62,7 @@ from async_hll_rcon.typedefs import (
     VoteKickStartedLogType,
     VoteKickStateType,
     VoteKickThresholdType,
+    GameServerCredentials,
 )
 
 
@@ -140,10 +142,12 @@ class AsyncRcon:
         receive_timeout: int = constants.TCP_TIMEOUT_READ,
         tcp_timeout: int = constants.TCP_TIMEOUT,
     ) -> None:
-        # TODO: Pydantic validation for game server credentials
-        self._ip_addr = ip_addr
-        self._port = int(port)
-        self._password = password
+        self._credentials = GameServerCredentials(
+            host_ip=pydantic.IPvAnyAddress(ip_addr),
+            host_port=int(port),
+            password=password,
+        )
+
         self._receive_timeout = receive_timeout
         self._tcp_timeout = tcp_timeout
         self.connections: list[HllConnection] = []
@@ -163,9 +167,9 @@ class AsyncRcon:
 
         async def _inner_setup() -> None:
             connection = await HllConnection.setup(
-                self._ip_addr,
-                self._port,
-                self._password,
+                self._credentials.host_ip,
+                self._credentials.host_port,
+                self._credentials.password,
                 self._receive_timeout,
                 self._tcp_timeout,
             )

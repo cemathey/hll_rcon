@@ -4,6 +4,7 @@ from typing import Callable, Self
 
 import trio
 from loguru import logger
+import pydantic
 
 from async_hll_rcon import constants, exceptions
 from async_hll_rcon.validators import (
@@ -23,7 +24,7 @@ class HllConnection:
 
     def __init__(
         self,
-        ip_addr: str,
+        ip_addr: pydantic.IPvAnyAddress,
         port: int,
         password: str,
         receive_timeout: int = constants.TCP_TIMEOUT_READ,
@@ -101,7 +102,7 @@ class HllConnection:
     @classmethod
     async def setup(
         cls,
-        ip_addr: str,
+        ip_addr: pydantic.IPvAnyAddress,
         port: int,
         password: str,
         receive_timeout: int,
@@ -115,7 +116,8 @@ class HllConnection:
     async def _connect(self) -> None:
         """Open a socket to the game server and retrieve the XOR key"""
         with trio.fail_after(self.tcp_timeout):
-            self._connection = await trio.open_tcp_stream(self.ip_addr, self.port)
+            # We must cast the pydantic.IPv4AnyAddress to a string here or it fails
+            self._connection = await trio.open_tcp_stream(str(self.ip_addr), self.port)
 
         # The very first thing the game server will return is the XOR key that all
         # subsequent requests require for encoding/decoding

@@ -10,6 +10,13 @@ class IntegerGreaterOrEqualToOne(pydantic.BaseModel):
     value: pydantic.conint(ge=1)  # type: ignore
 
 
+class GameServerCredentials(pydantic.BaseModel):
+    host_ip: pydantic.IPvAnyAddress
+    # port 0 is technically a port but will never occur
+    host_port: pydantic.conint(ge=1)  # type: ignore
+    password: str
+
+
 class ServerNameType(pydantic.BaseModel):
     """The servers name"""
 
