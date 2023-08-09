@@ -18,6 +18,7 @@ from async_hll_rcon.typedefs import (
     AutoBalanceThresholdType,
     AvailableMapsType,
     BanLogType,
+    BanLogBanType,
     CensoredWordType,
     ChatLogType,
     ConnectLogType,
@@ -669,9 +670,9 @@ class AsyncRcon:
                         r"BANNED FOR (\d+) HOURS", raw_removal_type
                     ):
                         ban_duration = int(duration_match.groups()[0])
-                        ban_type = constants.TEMPORARY_BAN
+                        ban_type = BanLogBanType.TEMPORARY_BAN
                     else:
-                        ban_type = constants.PERMANENT_BAN
+                        ban_type = BanLogBanType.PERMANENT_BAN
 
                     if removal_reason is None or removal_reason == "":
                         # logger.error(

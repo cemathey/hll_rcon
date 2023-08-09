@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import TypeAlias
-
 import pydantic
 
 from async_hll_rcon import constants
@@ -350,13 +350,16 @@ class KickLogType(pydantic.BaseModel):
     time: LogTimeStampType
 
 
+class BanLogBanType(Enum):
+    TEMPORARY_BAN = 1
+    PERMANENT_BAN = 2
+
+
 class BanLogType(pydantic.BaseModel):
     """A game server log line for a player being banned from the game"""
 
     player_name: str
-    # Temporary or permanent
-    # TODO: create types for perma/temp
-    ban_type: str
+    ban_type: BanLogBanType
     ban_duration_hours: int | None
     reason: str
     time: LogTimeStampType
