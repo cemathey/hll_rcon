@@ -585,7 +585,14 @@ def test_convert_vote_kick_thresholds(raw, expected):
 
 @pytest.mark.parametrize(
     "raw, expected",
-    [("1,2,3", ValueError), ((0,), ValueError), ("", ValueError), (None, ValueError)],
+    [
+        ("1,2,3", ValueError),
+        ((0,), ValueError),
+        ("", ValueError),
+        (None, ValueError),
+        ("-1,1", ValueError),
+        ("51,51", ValueError),
+    ],
 )
 def test_convert_vote_kick_thresholds_exceptions(raw, expected):
     with pytest.raises(expected):

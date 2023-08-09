@@ -2106,23 +2106,15 @@ class AsyncRcon:
     def _convert_vote_kick_thresholds(
         thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThresholdType] | str
     ) -> str:
-        # TODO: do more validation, check for negative player counts, votes, etc.
-        if thresholds is None:
+        if thresholds is None or thresholds == "":
             raise ValueError(
-                "Vote kick thresholds must be pairs in the form (player count, votes required)"
+                "Vote kick thresholds must be pairs in the form (player count, votes required), received no pairs"
             )
 
         raw_thresholds: list[int] = []
         if isinstance(thresholds, str):
-            if len(thresholds.split(",")) % 2 != 0:
-                raise ValueError(
-                    "Vote kick thresholds must be pairs in the form (player count, votes required), received incomplete pairs"
-                )
-            elif thresholds == "":
-                raise ValueError(
-                    "Vote kick thresholds must be pairs in the form (player count, votes required)"
-                )
-            return thresholds
+            split_thresholds = thresholds.split(",")
+            raw_thresholds = [int(threshhold) for threshhold in split_thresholds]
         else:
             for item in thresholds:
                 if isinstance(item, VoteKickThresholdType):
@@ -2141,6 +2133,14 @@ class AsyncRcon:
             raise ValueError(
                 "Vote kick thresholds must be pairs in the form (player count, votes required)"
             )
+
+        if any(threshold < 0 for threshold in raw_thresholds) or any(
+            not isinstance(threshold, int) for threshold in raw_thresholds
+        ):
+            raise ValueError("Vote kick threshholds must be positive integers")
+
+        if any(threshold > 50 for threshold in raw_thresholds):
+            raise ValueError("Thresholds can never be greater than 50")
 
         return ",".join(str(threshold) for threshold in raw_thresholds)
 
