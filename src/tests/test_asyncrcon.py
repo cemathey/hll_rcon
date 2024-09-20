@@ -1,36 +1,61 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from async_hll_rcon import constants
-from async_hll_rcon.rcon import AsyncRcon
-from async_hll_rcon.typedefs import (
-    BanLogType,
-    VipIdType,
-    AdminGroupType,
-    AdminIdType,
-    ChatLogType,
-    ConnectLogType,
-    DisconnectLogType,
-    KickLogType,
-    KillLogType,
-    LogTimeStampType,
-    MatchEndLogType,
-    MatchStartLogType,
-    VoteKickThresholdType,
-    PermanentBanType,
-    BanLogBanType,
-    PlayerInfoType,
-    ScoreType,
-    TeamKillLogType,
-    TeamSwitchLogType,
-    SquadType,
-    TemporaryBanType,
-    ServerPlayerSlotsType,
-    GameStateType,
-    PlayerNameType,
-    SteamIdType,
+from hll_rcon import constants
+from hll_rcon.log_types import (
+    BanLog,
+    BanLogBan,
+    ChatLog,
+    ConnectLog,
+    DisconnectLog,
+    EnteredAdminCamLog,
+    ExitedAdminCamLog,
+    GameLogType,
+    GameServerCredentials,
+    KickLog,
+    KillLog,
+    LogTimeStamp,
+    MatchEndLog,
+    MatchStartLog,
+    MessagedPlayerLog,
+    TeamKillLog,
+    TeamSwitchLog,
+    VoteKickCompletedStatusLog,
+    VoteKickExpiredLog,
+    VoteKickPlayerVoteLog,
+    VoteKickResultsLog,
+    VoteKickStartedLog,
 )
+from hll_rcon.rcon import AsyncRcon
+from hll_rcon.response_types import (
+    AdminGroup,
+    AdminId,
+    AutoBalanceState,
+    AutoBalanceThreshold,
+    AvailableMaps,
+    CensoredWord,
+    GameState,
+    HighPingLimit,
+    IdleKickTime,
+    InvalidTempBan,
+    MapRotation,
+    MaxQueueSize,
+    NumVipSlots,
+    PermanentBan,
+    Player,
+    PlayerInfo,
+    PlayerScore,
+    ServerName,
+    ServerPlayerSlots,
+    Squad,
+    TeamSwitchCoolDown,
+    TemporaryBan,
+    VipId,
+    VoteKickState,
+    VoteKickThreshold,
+)
+from hll_rcon.validators import IntegerGreaterOrEqualToOne
 
 
 @pytest.mark.parametrize(
@@ -67,7 +92,7 @@ def test_from_hll_list(raw, expected):
 @pytest.mark.parametrize(
     "slots, expected",
     [
-        ("0/100", ServerPlayerSlotsType(current_players=0, max_players=100)),
+        ("0/100", ServerPlayerSlots(current_players=0, max_players=100)),
     ],
 )
 def test_parse_get_current_max_player_slots(slots, expected):
@@ -83,7 +108,7 @@ Score: Allied: 4 - Axis: 1
 Remaining Time: 0:25:23
 Map: carentan_offensive_ger
 Next Map: hurtgenforest_warfare_V2""",
-            GameStateType(
+            GameState(
                 allied_players=46,
                 axis_players=46,
                 allied_score=4,
@@ -114,7 +139,20 @@ def test_relative_time_to_timedelta(raw, expected):
 
 @pytest.mark.parametrize(
     "raw, expected",
-    [("1678156382", datetime(year=2023, month=3, day=7, hour=2, minute=33, second=2))],
+    [
+        (
+            "1678156382",
+            datetime(
+                year=2023,
+                month=3,
+                day=7,
+                hour=2,
+                minute=33,
+                second=2,
+                tzinfo=timezone.utc,
+            ),
+        )
+    ],
 )
 def test_absolute_time_to_datetime(raw, expected):
     assert AsyncRcon._absolute_time_to_datetime(raw) == expected
@@ -127,17 +165,23 @@ def test_absolute_time_to_datetime(raw, expected):
             "KILL: Code Red Dewd(Allies/76561197976123456) -> Beevus(Axis/76561198977123456) with BOMBING RUN",
             "1:07 min",
             "1678160118",
-            KillLogType(
-                steam_id_64="76561197976123456",
+            KillLog(
+                player_id="76561197976123456",
                 player_name="Code Red Dewd",
                 player_team="Allies",
-                victim_steam_id_64="76561198977123456",
+                victim_player_id="76561198977123456",
                 victim_player_name="Beevus",
                 victim_team="Axis",
                 weapon="BOMBING RUN",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -147,17 +191,23 @@ def test_absolute_time_to_datetime(raw, expected):
             "TEAM KILL: Code Red Dewd(Allies/76561197976123456) -> Beevus(Axis/76561198977123456) with BOMBING RUN",
             "1:07 min",
             "1678160118",
-            TeamKillLogType(
-                steam_id_64="76561197976123456",
+            TeamKillLog(
+                player_id="76561197976123456",
                 player_name="Code Red Dewd",
                 player_team="Allies",
-                victim_steam_id_64="76561198977123456",
+                victim_player_id="76561198977123456",
                 victim_player_name="Beevus",
                 victim_team="Axis",
                 weapon="BOMBING RUN",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -167,15 +217,21 @@ def test_absolute_time_to_datetime(raw, expected):
             "CHAT[Team][Saucymuffin(Axis/76561198293123456)]: this server is pretty good",
             "1:07 min",
             "1678160118",
-            ChatLogType(
-                steam_id_64="76561198293123456",
+            ChatLog(
+                player_id="76561198293123456",
                 player_name="Saucymuffin",
                 player_team="Axis",
                 scope="Team",
                 content="this server is pretty good",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -185,15 +241,21 @@ def test_absolute_time_to_datetime(raw, expected):
             "CHAT[Unit][Saucymuffin(Axis/76561198293123456)]: this server is pretty good",
             "1:07 min",
             "1678160118",
-            ChatLogType(
-                steam_id_64="76561198293123456",
+            ChatLog(
+                player_id="76561198293123456",
                 player_name="Saucymuffin",
                 player_team="Axis",
                 scope="Unit",
                 content="this server is pretty good",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -203,12 +265,18 @@ def test_absolute_time_to_datetime(raw, expected):
             "CONNECTED Molotovgrl (76561198084123456)",
             "1:07 min",
             "1678160118",
-            ConnectLogType(
-                steam_id_64="76561198084123456",
+            ConnectLog(
+                player_id="76561198084123456",
                 player_name="Molotovgrl",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -218,12 +286,18 @@ def test_absolute_time_to_datetime(raw, expected):
             "DISCONNECTED BayouBanana (76561198084123456)",
             "1:07 min",
             "1678160118",
-            DisconnectLogType(
-                steam_id_64="76561198084123456",
+            DisconnectLog(
+                player_id="76561198084123456",
                 player_name="BayouBanana",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -233,13 +307,19 @@ def test_absolute_time_to_datetime(raw, expected):
             "TEAMSWITCH Jack Burton (None > Allies)",
             "1:07 min",
             "1678160118",
-            TeamSwitchLogType(
+            TeamSwitchLog(
                 player_name="Jack Burton",
                 from_team="None",
                 to_team="Allies",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -250,14 +330,20 @@ def test_absolute_time_to_datetime(raw, expected):
  Toxicity in command chat ]""",
             "1:07 min",
             "1678160118",
-            BanLogType(
+            BanLog(
                 player_name="Scab Bucket",
-                ban_type=BanLogBanType.TEMPORARY_BAN,
+                ban_type=BanLogBan.TEMPORARY_BAN,
                 ban_duration_hours=2,
                 reason="Toxicity in command chat",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -267,13 +353,19 @@ def test_absolute_time_to_datetime(raw, expected):
             """KICK: [Donny] has been kicked. [YOU WERE KICKED FOR BEING IDLE]""",
             "1:07 min",
             "1678160118",
-            KickLogType(
+            KickLog(
                 player_name="Donny",
                 kick_type=constants.IDLE_KICK,
                 reason="YOU WERE KICKED FOR BEING IDLE",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -283,13 +375,19 @@ def test_absolute_time_to_datetime(raw, expected):
             "KICK: [dzkirandr] has been kicked. [Host closed the connection.]",
             "1:07 min",
             "1678160118",
-            KickLogType(
+            KickLog(
                 player_name="dzkirandr",
                 kick_type=constants.HOST_CLOSED_CONNECTION_KICK,
                 reason="Host closed the connection.",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -299,13 +397,19 @@ def test_absolute_time_to_datetime(raw, expected):
             "KICK: [Daxter L Miller] has been kicked. [KICKED FOR TEAM KILLING!]",
             "1:07 min",
             "1678160118",
-            KickLogType(
+            KickLog(
                 player_name="Daxter L Miller",
                 kick_type=constants.TEAM_KILLING_KICK,
                 reason="KICKED FOR TEAM KILLING!",
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -315,14 +419,20 @@ def test_absolute_time_to_datetime(raw, expected):
             "MATCH ENDED `FOY WARFARE` ALLIED (1 - 4) AXIS",
             "1:07 min",
             "1678160118",
-            MatchEndLogType(
+            MatchEndLog(
                 map_name="FOY",
                 game_mode=constants.WARFARE_GAME_MODE,
                 allied_score=1,
                 axis_score=4,
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -332,12 +442,40 @@ def test_absolute_time_to_datetime(raw, expected):
             "MATCH START CARENTAN WARFARE",
             "1:07 min",
             "1678160118",
-            MatchStartLogType(
+            MatchStartLog(
                 map_name="CARENTAN",
                 game_mode=constants.WARFARE_GAME_MODE,
-                time=LogTimeStampType(
+                time=LogTimeStamp(
                     absolute_timestamp=datetime(
-                        year=2023, month=3, day=7, hour=3, minute=35, second=18
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
+                    ),
+                    relative_timestamp=timedelta(minutes=1, seconds=7),
+                ),
+            ),
+        ),
+        (
+            "MESSAGE: player [crandeezy(be7375d9e949f5f82b4facc5bb5ebe67)], content [It is not against the rules for an SL to not communicate. Join or make a new squad.]",
+            "1:07 min",
+            "1678160118",
+            MessagedPlayerLog(
+                player_id="be7375d9e949f5f82b4facc5bb5ebe67",
+                player_name="crandeezy",
+                message="It is not against the rules for an SL to not communicate. Join or make a new squad.",
+                time=LogTimeStamp(
+                    absolute_timestamp=datetime(
+                        year=2023,
+                        month=3,
+                        day=7,
+                        hour=3,
+                        minute=35,
+                        second=18,
+                        tzinfo=timezone.utc,
                     ),
                     relative_timestamp=timedelta(minutes=1, seconds=7),
                 ),
@@ -355,7 +493,8 @@ def test_parse_game_log(raw_log, relative_time, absolute_time, expected):
         (
             """[53.5 sec (1691524093)] KILL: JJ(Axis/76561199015319814) -> AceOfSpadess(Allies/76561197997173327) with MP40
 [50.5 sec (1691524096)] TEAMSWITCH BakedBoi (None > Axis)
-[49.1 sec (1691524097)] CHAT[Team][FreedomFries(Allies/76561198037148935)]: enemy garri destroyed B7k3""",
+[49.1 sec (1691524097)] CHAT[Team][FreedomFries(Allies/76561198037148935)]: enemy garri destroyed B7k3
+[49.1 sec (1691524097)] CHAT[Team][FreedomFries(Allies/d490508b4c5f72992c2b855c5736z4z4)]: enemy garri destroyed B7k3""",
             (
                 (
                     "KILL: JJ(Axis/76561199015319814) -> AceOfSpadess(Allies/76561197997173327) with MP40",
@@ -365,6 +504,11 @@ def test_parse_game_log(raw_log, relative_time, absolute_time, expected):
                 ("TEAMSWITCH BakedBoi (None > Axis)", "50.5 sec", "1691524096"),
                 (
                     "CHAT[Team][FreedomFries(Allies/76561198037148935)]: enemy garri destroyed B7k3",
+                    "49.1 sec",
+                    "1691524097",
+                ),
+                (
+                    "CHAT[Team][FreedomFries(Allies/d490508b4c5f72992c2b855c5736z4z4)]: enemy garri destroyed B7k3",
                     "49.1 sec",
                     "1691524097",
                 ),
@@ -384,24 +528,27 @@ def test_split_raw_log_lines(raw_logs, expected):
                 "Thunder_Chief : 76561198053381234",
                 "Ispanky : 76561197984134321",
                 "KidneyCarver : 76561197970731243",
+                "some guy : d490508b4c5f72992c2b855c5736z4z4",
             ],
-            (
-                {
-                    "76561198053381234": PlayerNameType(name="Thunder_Chief"),
-                    "76561197984134321": PlayerNameType(name="Ispanky"),
-                    "76561197970731243": PlayerNameType(name="KidneyCarver"),
-                },
-                {
-                    "Thunder_Chief": SteamIdType(steam_id_64="76561198053381234"),
-                    "Ispanky": SteamIdType(steam_id_64="76561197984134321"),
-                    "KidneyCarver": SteamIdType(steam_id_64="76561197970731243"),
-                },
-            ),
+            {
+                "76561198053381234": Player(
+                    player_name="Thunder_Chief", player_id="76561198053381234"
+                ),
+                "76561197984134321": Player(
+                    player_name="Ispanky", player_id="76561197984134321"
+                ),
+                "76561197970731243": Player(
+                    player_name="KidneyCarver", player_id="76561197970731243"
+                ),
+                "d490508b4c5f72992c2b855c5736z4z4": Player(
+                    player_name="some guy", player_id="d490508b4c5f72992c2b855c5736z4z4"
+                ),
+            },
         )
     ],
 )
-def test_parse_get_player_steam_ids(name_and_ids, expected):
-    assert AsyncRcon._parse_get_player_steam_ids(name_and_ids) == expected
+def test_parse_get_player_ids(name_and_ids, expected):
+    assert AsyncRcon._parse_get_player_ids(name_and_ids) == expected
 
 
 @pytest.mark.parametrize(
@@ -409,10 +556,10 @@ def test_parse_get_player_steam_ids(name_and_ids, expected):
     [
         (
             '76561198075923228 spectator "Grytzen"',
-            AdminIdType(
-                steam_id_64=SteamIdType(steam_id_64="76561198075923228"),
-                role=AdminGroupType(role="spectator"),
-                name=PlayerNameType(name="Grytzen"),
+            AdminId(
+                player_id="76561198075923228",
+                role=AdminGroup(role="spectator"),
+                name="Grytzen",
             ),
         ),
     ],
@@ -426,15 +573,15 @@ def test_parse_get_admin_ids(raw_admin_id, expected):
     [
         (
             '76561198042846962 "+Cronus+[DIXX] - (admin)"',
-            VipIdType(
-                steam_id_64=SteamIdType(steam_id_64="76561198042846962"),
+            VipId(
+                player_id="76561198042846962",
                 name="+Cronus+[DIXX] - (admin)",
             ),
         ),
         (
             '76561198214019848 "- RazBora - (BEER)"',
-            VipIdType(
-                steam_id_64=SteamIdType(steam_id_64="76561198214019848"),
+            VipId(
+                player_id="76561198214019848",
                 name="- RazBora - (BEER)",
             ),
         ),
@@ -458,14 +605,14 @@ Kills: 2 - Deaths: 2
 Score: C 18, O 0, D 80, S 0
 Level: 14
 """,
-            PlayerInfoType(
+            PlayerInfo(
                 player_name="NoodleArms",
-                steam_id_64="76561198004123456",
+                player_id="76561198004123456",
                 team="Axis",
-                unit=SquadType(unit_id=8, unit_name="ITEM"),
+                unit=Squad(unit_id=8, unit_name="ITEM"),
                 loadout="Standard Issue",
                 role="Assault",
-                score=ScoreType(
+                score=PlayerScore(
                     kills=2, deaths=2, combat=18, offensive=0, defensive=80, support=0
                 ),
                 level=14,
@@ -482,7 +629,15 @@ def test_parse_player_info(raw, expected):
     [
         (
             "2021.12.09-16.40.08",
-            datetime(year=2021, month=12, day=9, hour=16, minute=40, second=8),
+            datetime(
+                year=2021,
+                month=12,
+                day=9,
+                hour=16,
+                minute=40,
+                second=8,
+                tzinfo=timezone.utc,
+            ),
         )
     ],
 )
@@ -495,12 +650,18 @@ def test_ban_list_timestamp_conversion(raw, expected):
     [
         (
             '76561199023123456 : nickname "(WTH) Abu" banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TemporaryBanType(
-                steam_id_64="76561199023123456",
+            TemporaryBan(
+                player_id="76561199023123456",
                 player_name="(WTH) Abu",
                 duration_hours=2,
                 timestamp=datetime(
-                    year=2021, month=12, day=9, hour=16, minute=40, second=8
+                    year=2021,
+                    month=12,
+                    day=9,
+                    hour=16,
+                    minute=40,
+                    second=8,
+                    tzinfo=timezone.utc,
                 ),
                 reason="Being a troll",
                 admin="Some Admin Name",
@@ -508,12 +669,18 @@ def test_ban_list_timestamp_conversion(raw, expected):
         ),
         (
             '76561199023123456 : banned for 2 hours on 2021.12.09-16.40.08 for "Being a troll" by admin "Some Admin Name"',
-            TemporaryBanType(
-                steam_id_64="76561199023123456",
+            TemporaryBan(
+                player_id="76561199023123456",
                 player_name=None,
                 duration_hours=2,
                 timestamp=datetime(
-                    year=2021, month=12, day=9, hour=16, minute=40, second=8
+                    year=2021,
+                    month=12,
+                    day=9,
+                    hour=16,
+                    minute=40,
+                    second=8,
+                    tzinfo=timezone.utc,
                 ),
                 reason="Being a troll",
                 admin="Some Admin Name",
@@ -530,11 +697,17 @@ def test_temp_ban_parsing(raw, expected):
     [
         (
             '76561197975123456 : nickname "Georgij Zhukov Sovie" banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
-            PermanentBanType(
-                steam_id_64="76561197975123456",
+            PermanentBan(
+                player_id="76561197975123456",
                 player_name="Georgij Zhukov Sovie",
                 timestamp=datetime(
-                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                    year=2022,
+                    month=12,
+                    day=6,
+                    hour=16,
+                    minute=27,
+                    second=14,
+                    tzinfo=timezone.utc,
                 ),
                 reason="Racism",
                 admin="BLACKLIST: NoodleArms",
@@ -542,11 +715,17 @@ def test_temp_ban_parsing(raw, expected):
         ),
         (
             '76561197975123456 : banned on 2022.12.06-16.27.14 for "Racism" by admin "BLACKLIST: NoodleArms"',
-            PermanentBanType(
-                steam_id_64="76561197975123456",
+            PermanentBan(
+                player_id="76561197975123456",
                 player_name=None,
                 timestamp=datetime(
-                    year=2022, month=12, day=6, hour=16, minute=27, second=14
+                    year=2022,
+                    month=12,
+                    day=6,
+                    hour=16,
+                    minute=27,
+                    second=14,
+                    tzinfo=timezone.utc,
                 ),
                 reason="Racism",
                 admin="BLACKLIST: NoodleArms",
@@ -564,10 +743,10 @@ def test_perma_ban_parsing(raw, expected):
         (
             "0,1,10,5,25,12,50,20",
             [
-                VoteKickThresholdType(player_count=0, votes_required=1),
-                VoteKickThresholdType(player_count=10, votes_required=5),
-                VoteKickThresholdType(player_count=25, votes_required=12),
-                VoteKickThresholdType(player_count=50, votes_required=20),
+                VoteKickThreshold(player_count=0, votes_required=1),
+                VoteKickThreshold(player_count=10, votes_required=5),
+                VoteKickThreshold(player_count=25, votes_required=12),
+                VoteKickThreshold(player_count=50, votes_required=20),
             ],
         )
     ],

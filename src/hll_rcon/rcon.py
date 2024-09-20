@@ -1,7 +1,7 @@
 import inspect
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, Generator, Iterable, MutableSequence
 from warnings import warn
 
@@ -10,60 +10,60 @@ import trio
 from dateutil import parser
 from loguru import logger
 
-from async_hll_rcon import constants
-from async_hll_rcon.connection import HllConnection
-from async_hll_rcon.typedefs import (
-    AdminGroupType,
-    AdminIdType,
-    AutoBalanceStateType,
-    AutoBalanceThresholdType,
-    AvailableMapsType,
-    BanLogType,
-    BanLogBanType,
-    CensoredWordType,
-    ChatLogType,
-    ConnectLogType,
-    DisconnectLogType,
-    EnteredAdminCamLogType,
-    ExitedAdminCamLogType,
+from hll_rcon import constants
+from hll_rcon.connection import HllConnection
+from hll_rcon.log_types import (
+    BanLog,
+    BanLogBan,
+    ChatLog,
+    ConnectLog,
+    DisconnectLog,
+    EnteredAdminCamLog,
+    ExitedAdminCamLog,
     GameLogType,
-    GameStateType,
-    HighPingLimitType,
-    IdleKickTimeType,
-    IntegerGreaterOrEqualToOne,
-    InvalidTempBanType,
-    KickLogType,
-    KillLogType,
-    LogTimeStampType,
-    MapRotationType,
-    MapType,
-    MatchEndLogType,
-    MatchStartLogType,
-    MaxQueueSizeType,
-    MessagedPlayerLogType,
-    NumVipSlotsType,
-    PermanentBanType,
-    PlayerInfoType,
-    PlayerNameType,
-    ScoreType,
-    ServerNameType,
-    ServerPlayerSlotsType,
-    SquadType,
-    SteamIdType,
-    TeamKillLogType,
-    TeamSwitchCoolDownType,
-    TeamSwitchLogType,
-    TemporaryBanType,
-    VipIdType,
-    VoteKickCompletedStatusType,
-    VoteKickExpiredLogType,
-    VoteKickPlayerVoteLogType,
-    VoteKickResultsLogType,
-    VoteKickStartedLogType,
-    VoteKickStateType,
-    VoteKickThresholdType,
     GameServerCredentials,
+    KickLog,
+    KillLog,
+    LogTimeStamp,
+    MatchEndLog,
+    MatchStartLog,
+    MessagedPlayerLog,
+    TeamKillLog,
+    TeamSwitchLog,
+    VoteKickCompletedStatusLog,
+    VoteKickExpiredLog,
+    VoteKickPlayerVoteLog,
+    VoteKickResultsLog,
+    VoteKickStartedLog,
 )
+from hll_rcon.response_types import (
+    AdminGroup,
+    AdminId,
+    AutoBalanceState,
+    AutoBalanceThreshold,
+    AvailableMaps,
+    CensoredWord,
+    GameState,
+    HighPingLimit,
+    IdleKickTime,
+    InvalidTempBan,
+    MapRotation,
+    MaxQueueSize,
+    NumVipSlots,
+    PermanentBan,
+    Player,
+    PlayerInfo,
+    PlayerScore,
+    ServerName,
+    ServerPlayerSlots,
+    Squad,
+    TeamSwitchCoolDown,
+    TemporaryBan,
+    VipId,
+    VoteKickState,
+    VoteKickThreshold,
+)
+from hll_rcon.validators import IntegerGreaterOrEqualToOne
 
 
 class AsyncRcon:
@@ -71,26 +71,26 @@ class AsyncRcon:
 
     # Ban log patterns
     _temp_ban_log_pattern = re.compile(
-        r"(\d{17}) :(?: nickname \"(.*)\")? banned for (\d+) hours on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?",
+        r"(.*) :(?: nickname \"(.*)\")? banned for (\d+) hours on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?",
         re.DOTALL,
     )
-    _temp_ban_log_missing_steam_id_name_pattern = re.compile(
-        r"(\d{17})? :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\"",
+    _temp_ban_log_missing_player_id_name_pattern = re.compile(
+        r"(.*)? :(?: nickname \"(.*)\")? banned for (\d+) hours on (.*) for \"(.*)\" by admin \"(.*)\"",
         re.DOTALL,
     )
     _perma_ban_log_pattern = re.compile(
-        r"(\d{17}) :(?: nickname \"(.*)\")? banned on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?"
+        r"(.*) :(?: nickname \"(.*)\")? banned on ([\d]{4}.[\d]{2}.[\d]{2}-[\d]{2}.[\d]{2}.[\d]{2})(?: for \"(.*)\" by admin \"(.*)\")?"
     )
 
     # Game log patterns
     _kill_teamkill_pattern = re.compile(
-        r"(?:(KILL):|(TEAM KILL):) (.*)\((Allies|Axis)\/(\d{17})\) -> (.*)\((Allies|Axis)\/(\d{17})\) with (.*)"
+        r"(?:(KILL):|(TEAM KILL):) (.*)\((Allies|Axis)\/(.*)\) -> (.*)\((Allies|Axis)\/(.*)\) with (.*)"
     )
     _chat_pattern = re.compile(
-        r"CHAT\[(Team|Unit)\]\[(.*)\((Allies|Axis)/(\d{17})\)\]: (.*)"
+        r"CHAT\[(Team|Unit)\]\[(.*)\((Allies|Axis)\/(.*)\)\]: (.*)"
     )
     _connect_disconnect_pattern = re.compile(
-        r"(?:(CONNECTED)|(DISCONNECTED)) (.+) \((\d{17})\)"
+        r"(?:(CONNECTED)|(DISCONNECTED)) (.+) \((.*)\)"
     )
     _teamswitch_pattern = re.compile(r"(TEAMSWITCH) (.*) \((.*) > (.*)\)")
     _kick_ban_pattern = re.compile(
@@ -113,13 +113,13 @@ class AsyncRcon:
     _vote_results_pattern = re.compile(
         r"VOTESYS: Vote Kick {(.*)} successfully passed. \[For: (\d+)\/(\d+) - Against: (\d+)"
     )
-    _admin_cam_pattern = r"Player \[(.*) \((\d{17})\)\] (Entered|Left) Admin Camera"
+    _admin_cam_pattern = r"Player \[(.*) \((.*)\)\] (Entered|Left) Admin Camera"
     _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE)")
     _match_end_pattern = re.compile(
         r"MATCH ENDED `(.*) (WARFARE|OFFENSIVE)` ALLIED \((\d) - (\d)"
     )
     _message_player_pattern = re.compile(
-        r"MESSAGE: player \[(.+)\((\d+)\)\], content \[(.+)\]", re.DOTALL
+        r"MESSAGE: player \[(.+)\((.*)\)\], content \[(.+)\]", re.DOTALL
     )
 
     # Used to split the new line delimited results from get_game_logs() while
@@ -143,7 +143,7 @@ class AsyncRcon:
         tcp_timeout: int = constants.TCP_TIMEOUT,
     ) -> None:
         self._credentials = GameServerCredentials(
-            host_ip=pydantic.IPvAnyAddress(ip_addr),
+            host_ip=pydantic.IPvAnyAddress(ip_addr),  # type: ignore
             host_port=int(port),
             password=password,
         )
@@ -232,7 +232,7 @@ class AsyncRcon:
 
     async def get_server_name(
         self, output: MutableSequence | None = None
-    ) -> ServerNameType:
+    ) -> ServerName:
         """Return the server name as defined in the game server `Server.ini` file"""
         async with self._get_connection() as conn:
             result = await conn.get_server_name()
@@ -240,7 +240,7 @@ class AsyncRcon:
                 f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        validated_result = ServerNameType(name=result)
+        validated_result = ServerName(name=result)
 
         if output is not None:
             output.append(validated_result)
@@ -248,15 +248,15 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_current_max_player_slots(slots: str) -> ServerPlayerSlotsType:
+    def _parse_get_current_max_player_slots(slots: str) -> ServerPlayerSlots:
         current_players, max_players = slots.split("/")
-        return ServerPlayerSlotsType(
+        return ServerPlayerSlots(
             current_players=int(current_players), max_players=int(max_players)
         )
 
     async def get_current_max_player_slots(
         self, output: MutableSequence | None = None
-    ) -> ServerPlayerSlotsType:
+    ) -> ServerPlayerSlots:
         """Return the number of players currently on the server and max players"""
         async with self._get_connection() as conn:
             result = await conn.get_current_max_player_slots()
@@ -272,7 +272,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_gamestate(raw_gamestate: str) -> GameStateType:
+    def _parse_gamestate(raw_gamestate: str) -> GameState:
         if match := re.match(AsyncRcon._gamestate_pattern, raw_gamestate):
             (
                 allied_players,
@@ -285,7 +285,7 @@ class AsyncRcon:
                 current_map,
                 next_map,
             ) = match.groups()
-            return GameStateType(
+            return GameState(
                 allied_players=int(allied_players),
                 axis_players=int(axis_players),
                 allied_score=int(allied_score),
@@ -301,9 +301,7 @@ class AsyncRcon:
                 f"Game server returned invalid results for get_gamestate()"
             )
 
-    async def get_gamestate(
-        self, output: MutableSequence | None = None
-    ) -> GameStateType:
+    async def get_gamestate(self, output: MutableSequence | None = None) -> GameState:
         """Return the current round state"""
         async with self._get_connection() as conn:
             result = await conn.get_gamestate()
@@ -320,7 +318,7 @@ class AsyncRcon:
 
     async def get_max_queue_size(
         self, output: MutableSequence | None = None
-    ) -> MaxQueueSizeType:
+    ) -> MaxQueueSize:
         """Return the maximum number of players allowed in the queue to join the server"""
         async with self._get_connection() as conn:
             result = await conn.get_max_queue_size()
@@ -328,7 +326,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        validated_result = MaxQueueSizeType(size=int(result))
+        validated_result = MaxQueueSize(size=int(result))
 
         if output is not None:
             output.append(validated_result)
@@ -361,7 +359,7 @@ class AsyncRcon:
 
     async def get_num_vip_slots(
         self, output: MutableSequence | None = None
-    ) -> NumVipSlotsType:
+    ) -> NumVipSlots:
         """Returns the number of reserved VIP slots"""
         async with self._get_connection() as conn:
             result = await conn.get_num_vip_slots()
@@ -369,7 +367,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        validated_result = NumVipSlotsType(count=int(result))
+        validated_result = NumVipSlots(count=int(result))
 
         if output is not None:
             output.append(validated_result)
@@ -500,34 +498,34 @@ class AsyncRcon:
     def _absolute_time_to_datetime(absolute_time: str) -> datetime:
         """Convert a Unix UTC timestamp to a native datetime"""
         # Game server time stamps are already UTC
-        return datetime.utcfromtimestamp(float(absolute_time))
+        return datetime.fromtimestamp(float(absolute_time), tz=timezone.utc)
 
     @staticmethod
     def _parse_game_log(
         raw_log: str, relative_time: str, absolute_time: str
     ) -> (
-        BanLogType
-        | ChatLogType
-        | ConnectLogType
-        | DisconnectLogType
-        | EnteredAdminCamLogType
-        | ExitedAdminCamLogType
-        | KickLogType
-        | KillLogType
-        | MatchEndLogType
-        | MatchStartLogType
-        | MessagedPlayerLogType
-        | TeamKillLogType
-        | TeamSwitchLogType
-        | VoteKickExpiredLogType
-        | VoteKickCompletedStatusType
-        | VoteKickPlayerVoteLogType
-        | VoteKickResultsLogType
-        | VoteKickStartedLogType
+        BanLog
+        | ChatLog
+        | ConnectLog
+        | DisconnectLog
+        | EnteredAdminCamLog
+        | ExitedAdminCamLog
+        | KickLog
+        | KillLog
+        | MatchEndLog
+        | MatchStartLog
+        | MessagedPlayerLog
+        | TeamKillLog
+        | TeamSwitchLog
+        | VoteKickExpiredLog
+        | VoteKickCompletedStatusLog
+        | VoteKickPlayerVoteLog
+        | VoteKickResultsLog
+        | VoteKickStartedLog
         | None
     ):
         """Parse a raw HLL game log instance to an aware pydantic.BaseModel type"""
-        time = LogTimeStampType(
+        time = LogTimeStamp(
             absolute_timestamp=AsyncRcon._absolute_time_to_datetime(absolute_time),
             relative_timestamp=AsyncRcon._relative_time_to_timedelta(relative_time),
         )
@@ -539,30 +537,30 @@ class AsyncRcon:
                     team_kill,
                     player_name,
                     player_team,
-                    steam_id_64,
+                    player_id,
                     victim_player_name,
                     victim_team,
-                    victim_steam_id_64,
+                    victim_player_id,
                     weapon,
                 ) = match.groups()
 
                 if kill:
-                    return KillLogType(
-                        steam_id_64=steam_id_64,
+                    return KillLog(
+                        player_id=player_id,
                         player_name=player_name,
                         player_team=player_team,
-                        victim_steam_id_64=victim_steam_id_64,
+                        victim_player_id=victim_player_id,
                         victim_player_name=victim_player_name,
                         victim_team=victim_team,
                         weapon=weapon,
                         time=time,
                     )
                 else:
-                    return TeamKillLogType(
-                        steam_id_64=steam_id_64,
+                    return TeamKillLog(
+                        player_id=player_id,
                         player_name=player_name,
                         player_team=player_team,
-                        victim_steam_id_64=victim_steam_id_64,
+                        victim_player_id=victim_player_id,
                         victim_player_name=victim_player_name,
                         victim_team=victim_team,
                         weapon=weapon,
@@ -571,9 +569,9 @@ class AsyncRcon:
 
         elif raw_log.startswith("CHAT"):
             if match := re.match(AsyncRcon._chat_pattern, raw_log):
-                scope, player_name, team, steam_id_64, content = match.groups()
-                return ChatLogType(
-                    steam_id_64=steam_id_64,
+                scope, player_name, team, player_id, content = match.groups()
+                return ChatLog(
+                    player_id=player_id,
                     player_name=player_name,
                     player_team=team,
                     scope=scope,
@@ -584,21 +582,21 @@ class AsyncRcon:
                 ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("CONNECTED") or raw_log.startswith("DISCONNECTED"):
             if match := re.match(AsyncRcon._connect_disconnect_pattern, raw_log):
-                connected, disconnected, player_name, steam_id_64 = match.groups()
+                connected, disconnected, player_name, player_id = match.groups()
                 if connected:
-                    return ConnectLogType(
-                        steam_id_64=steam_id_64, player_name=player_name, time=time
+                    return ConnectLog(
+                        player_id=player_id, player_name=player_name, time=time
                     )
                 else:
-                    return DisconnectLogType(
-                        steam_id_64=steam_id_64, player_name=player_name, time=time
+                    return DisconnectLog(
+                        player_id=player_id, player_name=player_name, time=time
                     )
             else:
                 ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("TEAMSWITCH"):
             if match := re.match(AsyncRcon._teamswitch_pattern, raw_log):
                 action, player_name, from_team, to_team = match.groups()
-                return TeamSwitchLogType(
+                return TeamSwitchLog(
                     player_name=player_name,
                     from_team=from_team,
                     to_team=to_team,
@@ -654,7 +652,7 @@ class AsyncRcon:
                     if removal_reason == "":
                         logger.error(f"invalid {removal_reason=}")
 
-                    return KickLogType(
+                    return KickLog(
                         player_name=player_name,
                         kick_type=removal_type,
                         reason=removal_reason,
@@ -674,9 +672,9 @@ class AsyncRcon:
                         r"BANNED FOR (\d+) HOURS", raw_removal_type
                     ):
                         ban_duration = int(duration_match.groups()[0])
-                        ban_type = BanLogBanType.TEMPORARY_BAN
+                        ban_type = BanLogBan.TEMPORARY_BAN
                     else:
-                        ban_type = BanLogBanType.PERMANENT_BAN
+                        ban_type = BanLogBan.PERMANENT_BAN
 
                     if removal_reason is None or removal_reason == "":
                         # logger.error(
@@ -684,7 +682,7 @@ class AsyncRcon:
                         # )
                         logger.error(f"{raw_log=}")
 
-                    return BanLogType(
+                    return BanLog(
                         player_name=player_name,
                         ban_type=ban_type,
                         ban_duration_hours=ban_duration,
@@ -696,12 +694,10 @@ class AsyncRcon:
         elif raw_log.startswith("MATCH"):
             if match := re.match(AsyncRcon._match_start_pattern, raw_log):
                 map_name, game_mode = match.groups()
-                return MatchStartLogType(
-                    map_name=map_name, game_mode=game_mode, time=time
-                )
+                return MatchStartLog(map_name=map_name, game_mode=game_mode, time=time)
             elif match := re.match(AsyncRcon._match_end_pattern, raw_log):
                 map_name, game_mode, allied_score, axis_score = match.groups()
-                return MatchEndLogType(
+                return MatchEndLog(
                     map_name=map_name,
                     game_mode=game_mode,
                     allied_score=int(allied_score),
@@ -712,17 +708,17 @@ class AsyncRcon:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("Player"):
             if match := re.match(AsyncRcon._admin_cam_pattern, raw_log):
-                player_name, steam_id_64, entered_exited = match.groups()
+                player_name, player_id, entered_exited = match.groups()
 
                 if entered_exited == "Entered":
-                    return EnteredAdminCamLogType(
-                        steam_id_64=steam_id_64,
+                    return EnteredAdminCamLog(
+                        player_id=player_id,
                         player_name=player_name,
                         time=time,
                     )
                 elif entered_exited == "Left":
-                    return ExitedAdminCamLogType(
-                        steam_id_64=steam_id_64,
+                    return ExitedAdminCamLog(
+                        player_id=player_id,
                         player_name=player_name,
                         time=time,
                     )
@@ -733,7 +729,7 @@ class AsyncRcon:
         elif raw_log.startswith("VOTESYS"):
             if match := re.match(AsyncRcon._player_voted_pattern, raw_log):
                 player_name, vote_type, vote_id = match.groups()
-                return VoteKickPlayerVoteLogType(
+                return VoteKickPlayerVoteLog(
                     player_name=player_name,
                     vote_type=vote_type,
                     vote_id=int(vote_id),
@@ -741,15 +737,15 @@ class AsyncRcon:
                 )
             elif match := re.match(AsyncRcon._vote_completed_pattern, raw_log):
                 vote_id, vote_result = match.groups()
-                return VoteKickCompletedStatusType(
+                return VoteKickCompletedStatusLog(
                     vote_result=vote_result, vote_id=int(vote_id), time=time
                 )
             elif match := re.match(AsyncRcon._vote_expired_pattern, raw_log):
                 vote_id = match.groups()[0]
-                return VoteKickExpiredLogType(vote_id=int(vote_id), time=time)
+                return VoteKickExpiredLog(vote_id=int(vote_id), time=time)
             elif match := re.match(AsyncRcon._vote_started_pattern, raw_log):
                 player_name, vote_type, victim_player_name, vote_id = match.groups()
-                return VoteKickStartedLogType(
+                return VoteKickStartedLog(
                     player_name=player_name,
                     victim_player_name=victim_player_name,
                     vote_type=vote_type,
@@ -763,7 +759,7 @@ class AsyncRcon:
                     votes_required,
                     against_votes,
                 ) = match.groups()
-                return VoteKickResultsLogType(
+                return VoteKickResultsLog(
                     victim_player_name=victim_player_name,
                     for_votes=int(for_votes),
                     against_votes=int(against_votes),
@@ -774,9 +770,9 @@ class AsyncRcon:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("MESSAGE"):
             if match := re.match(AsyncRcon._message_player_pattern, raw_log):
-                player_name, steam_id_64, message = match.groups()
-                return MessagedPlayerLogType(
-                    steam_id_64=steam_id_64,
+                player_name, player_id, message = match.groups()
+                return MessagedPlayerLog(
+                    player_id=player_id,
                     player_name=player_name,
                     message=message,
                     time=time,
@@ -843,24 +839,21 @@ class AsyncRcon:
 
         return logs
 
-    async def get_current_map(self, output: MutableSequence | None = None) -> MapType:
+    async def get_current_map(self, output: MutableSequence | None = None) -> str:
         """Return the current map name"""
         async with self._get_connection() as conn:
             result = await conn.get_current_map()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
-
-        validated_result = MapType(name=result)
-
         if output is not None:
-            output.append(validated_result)
+            output.append(result)
 
-        return validated_result
+        return result
 
     async def get_available_maps(
         self, output: MutableSequence | None = None
-    ) -> AvailableMapsType:
+    ) -> AvailableMaps:
         """Return a list of all available map names (not the current map rotation)."""
         async with self._get_connection() as conn:
             result = await conn.get_available_maps()
@@ -869,9 +862,7 @@ class AsyncRcon:
             )
 
         map_names = self._from_hll_list(result)
-        validated_result = AvailableMapsType(
-            maps=[MapType(name=name) for name in map_names]
-        )
+        validated_result = AvailableMaps(maps=[name for name in map_names])
 
         if output is not None:
             output.append(validated_result)
@@ -880,7 +871,7 @@ class AsyncRcon:
 
     async def get_map_rotation(
         self, output: MutableSequence | None = None
-    ) -> MapRotationType:
+    ) -> MapRotation:
         """Return a list of the currently set map rotation names"""
         async with self._get_connection() as conn:
             result = await conn.get_map_rotation()
@@ -889,9 +880,7 @@ class AsyncRcon:
             )
 
         map_names = self._from_hll_list(result)
-        validated_result = MapRotationType(
-            maps=[MapType(name=name) for name in map_names]
-        )
+        validated_result = MapRotation(maps=[name for name in map_names])
 
         if output is not None:
             output.append(validated_result)
@@ -985,7 +974,7 @@ class AsyncRcon:
     async def get_players(
         self,
         output: MutableSequence | None = None,
-    ) -> list[PlayerNameType]:
+    ) -> list[str]:
         """Return a list of player names currently connected to the game server"""
         async with self._get_connection() as conn:
             result = await conn.get_players()
@@ -993,13 +982,11 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        validated_result = [
-            PlayerNameType(name=name) for name in AsyncRcon._from_hll_list(result)
-        ]
+        validated_result = [name for name in AsyncRcon._from_hll_list(result)]
 
         # HLL likes to return the delimeter at the end of the last entry
         # even though there isn't another result
-        if validated_result[-1].name == "":
+        if validated_result[-1] == "":
             validated_result = validated_result[:-1]
         else:
             validated_result = validated_result
@@ -1010,36 +997,40 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_player_steam_ids(
+    def _parse_get_player_ids(
         name_and_ids: list[str],
-    ) -> tuple[dict[str, PlayerNameType], dict[str, SteamIdType]]:
+    ) -> dict[str, Player]:
         """Parse name and steam ID pairs into dictionaries"""
-        steam_id_64_lookup: dict[str, PlayerNameType] = {}
-        player_name_lookup: dict[str, SteamIdType] = {}
+        # player_id_64_lookup: dict[str, str] = {}
+        # player_name_lookup: dict[str, str] = {}
 
+        player_id_lookup: dict[str, Player] = {}
         for pair in name_and_ids:
-            player_name, steam_id_64 = pair.split(" : ")
-            steam_id_64_lookup[steam_id_64] = PlayerNameType(name=player_name)
-            player_name_lookup[player_name] = SteamIdType(steam_id_64=steam_id_64)
+            player_name, player_id = pair.split(" : ")
+            # player_id_64_lookup[player_id] = player_name
+            # player_name_lookup[player_name] = player_id
+            player = Player(player_name=player_name, player_id=player_id)
+            player_id_lookup[player_id] = player
 
-        return steam_id_64_lookup, player_name_lookup
+        # return player_id_64_lookup, player_name_lookup
+        return player_id_lookup
 
-    async def get_player_steam_ids(
+    async def get_player_ids(
         self, output: MutableSequence | None = None
-    ) -> tuple[dict[str, PlayerNameType], dict[str, SteamIdType]]:
-        """Get the player names and steam IDs of all the players currently connected to the game server
+    ) -> dict[str, Player]:
+        """Get the player names and player IDs of all the players currently connected to the game server
 
         Returns
-            A tuple of dictionaries, steam_id_64: player_name and player_name: steam_id_64
+            A tuple of dictionaries, player_id: player_name and player_name: player_id
         """
         async with self._get_connection() as conn:
-            result = await conn.get_player_steam_ids()
+            result = await conn.get_player_ids()
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
         entries = self._from_hll_list(result)
-        validated_result = self._parse_get_player_steam_ids(entries)
+        validated_result = self._parse_get_player_ids(entries)
 
         if output is not None:
             output.append(validated_result)
@@ -1047,19 +1038,19 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_admin_id(raw_admin_id: str) -> AdminIdType:
-        steam_id_64, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
-        return AdminIdType(
-            steam_id_64=SteamIdType(steam_id_64=steam_id_64),
-            role=AdminGroupType(role=role),
-            name=PlayerNameType(name=quoted_name[1:-1]),
+    def _parse_get_admin_id(raw_admin_id: str) -> AdminId:
+        player_id, role, quoted_name = raw_admin_id.split(" ", maxsplit=2)
+        return AdminId(
+            player_id=player_id,
+            role=AdminGroup(role=role),
+            name=quoted_name[1:-1],
         )
 
     async def get_admin_ids(
         self,
         output: MutableSequence | None = None,
-    ) -> list[AdminIdType]:
-        """Return each steam ID that has an admin role on the server, see also get_admin_groups()"""
+    ) -> list[AdminId]:
+        """Return each player ID that has an admin role on the server, see also get_admin_groups()"""
         async with self._get_connection() as conn:
             result = await conn.get_admin_ids()
             logger.debug(
@@ -1079,7 +1070,7 @@ class AsyncRcon:
     async def get_admin_groups(
         self,
         output: MutableSequence | None = None,
-    ) -> list[AdminGroupType]:
+    ) -> list[AdminGroup]:
         """Return a list of available admin roles"""
         async with self._get_connection() as conn:
             result = await conn.get_admin_groups()
@@ -1088,7 +1079,7 @@ class AsyncRcon:
             )
 
         group_names = AsyncRcon._from_hll_list(result)
-        validated_result = [AdminGroupType(role=name) for name in group_names]
+        validated_result = [AdminGroup(role=name) for name in group_names]
 
         if output is not None:
             output.append(validated_result)
@@ -1097,21 +1088,21 @@ class AsyncRcon:
 
     async def add_admin(
         self,
-        steam_id_64: str,
+        player_id: str,
         role: str,
         name: str | None = None,
         output: MutableSequence | None = None,
     ) -> bool:
-        """Grant admin role access to a steam ID
+        """Grant admin role access to a player ID
 
         Args
-            steam_id_64: A 17 digit steam ID
+            player_id: The users player ID
             role: A valid HLL admin role, see get_admin_groups()
             name: An optional display name, the game server will accept anything here
-                there is no necessary correlation to the names the steam ID plays with on the game server
+                there is no necessary correlation to the names the player ID plays with on the game server
         """
         async with self._get_connection() as conn:
-            result = await conn.add_admin(steam_id_64=steam_id_64, role=role, name=name)
+            result = await conn.add_admin(player_id=player_id, role=role, name=name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
@@ -1128,12 +1119,12 @@ class AsyncRcon:
 
     async def remove_admin(
         self,
-        steam_id_64: str,
+        player_id: str,
         output: MutableSequence | None = None,
     ) -> bool:
         """Remove all admin roles from the specified steam ID, see get_admin_groups() for possible admin roles"""
         async with self._get_connection() as conn:
-            result = await conn.remove_admin(steam_id_64=steam_id_64)
+            result = await conn.remove_admin(player_id=player_id)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
@@ -1149,17 +1140,15 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_get_vip_id(vip_id: str) -> VipIdType:
-        steam_id_64, quoted_name = vip_id.split(" ", maxsplit=1)
-        return VipIdType(
-            steam_id_64=SteamIdType(steam_id_64=steam_id_64), name=quoted_name[1:-1]
-        )
+    def _parse_get_vip_id(vip_id: str) -> VipId:
+        player_id, quoted_name = vip_id.split(" ", maxsplit=1)
+        return VipId(player_id=player_id, name=quoted_name[1:-1])
 
     async def get_vip_ids(
         self,
         output: MutableSequence | None = None,
-    ) -> list[VipIdType]:
-        """Return a HLL tab delimited list of VIP steam ID 64s and names"""
+    ) -> list[VipId]:
+        """Return a HLL tab delimited list of VIP player IDs and names"""
         async with self._get_connection() as conn:
             result = await conn.get_vip_ids()
             logger.debug(
@@ -1175,7 +1164,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_player_info(raw_player_info: str) -> PlayerInfoType | None:
+    def _parse_player_info(raw_player_info: str) -> PlayerInfo | None:
         if raw_player_info == constants.FAIL_RESPONSE:
             return None
 
@@ -1186,11 +1175,11 @@ class AsyncRcon:
             )
 
         player_name: str | None = None
-        steam_id_64: str | None = None
+        player_id: str | None = None
         raw_team: str | None = None
         team: str | None = None
         role: str | None = None
-        unit: SquadType | None = None
+        unit: Squad | None = None
         loadout: str | None = None
         kills: str | None = None
         deaths: str | None = None
@@ -1203,7 +1192,7 @@ class AsyncRcon:
             if line.startswith("Name"):
                 _, player_name = line.split("Name: ")
             elif line.startswith("steam"):
-                _, steam_id_64 = line.split("steamID64: ")
+                _, player_id = line.split("steamID64: ")
             elif line.startswith("Team"):
                 _, raw_team = line.split("Team: ")
             elif line.startswith("Role"):
@@ -1211,7 +1200,7 @@ class AsyncRcon:
             elif line.startswith("Unit"):
                 left, unit_name = line.split(" - ")
                 _, unit_id = left.split("Unit: ")
-                unit = SquadType(unit_id=int(unit_id), unit_name=unit_name)
+                unit = Squad(unit_id=int(unit_id), unit_name=unit_name)
             elif line.startswith("Loadout"):
                 _, loadout = line.split("Loadout: ")
             elif line.startswith("Kills"):
@@ -1233,15 +1222,14 @@ class AsyncRcon:
             scores[key] = int(score)
 
         if any(
-            key is None
-            for key in (player_name, steam_id_64, kills, deaths, role, level)
+            key is None for key in (player_name, player_id, kills, deaths, role, level)
         ):
             logger.error(f"{raw_player_info}")
             raise ValueError(
                 f"Received an invalid or incomplete `PlayerInfo`=`{raw_player_info}` from the game server"
             )
 
-        processed_score = ScoreType(
+        processed_score = PlayerScore(
             kills=int(kills),  # type: ignore
             deaths=int(deaths),  # type: ignore
             combat=scores["C"],
@@ -1250,9 +1238,9 @@ class AsyncRcon:
             support=scores["S"],
         )
 
-        return PlayerInfoType(
+        return PlayerInfo(
             player_name=player_name,  # type: ignore
-            steam_id_64=steam_id_64,  # type: ignore
+            player_id=player_id,  # type: ignore
             team=team,
             unit=unit,
             loadout=loadout,
@@ -1263,7 +1251,7 @@ class AsyncRcon:
 
     async def get_player_info(
         self, player_name: str, output: MutableSequence | None = None
-    ) -> PlayerInfoType | None:
+    ) -> PlayerInfo | None:
         """Return detailed player info for the given player name"""
         if not player_name:
             raise ValueError("Must provide a player name")
@@ -1283,17 +1271,17 @@ class AsyncRcon:
         return validated_result
 
     async def add_vip(
-        self, steam_id_64: str, name: str | None, output: MutableSequence | None = None
+        self, player_id: str, name: str | None, output: MutableSequence | None = None
     ) -> bool:
-        """Grant VIP status to the given steam ID
+        """Grant VIP status to the given player ID
 
         Args
-            steam_id_64: A 17 digit steam ID
+            player_id: The users player ID
             name: An optional display name, the game server will accept anything here
-                there is no necessary correlation to the names the steam ID plays with on the game server
+                there is no necessary correlation to the names the player ID plays with on the game server
         """
         async with self._get_connection() as conn:
-            result = await conn.add_vip(steam_id_64=steam_id_64, name=name)
+            result = await conn.add_vip(player_id=player_id, name=name)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
@@ -1309,11 +1297,11 @@ class AsyncRcon:
         return validated_result
 
     async def remove_vip(
-        self, steam_id_64: str, output: MutableSequence | None = None
+        self, player_id: str, output: MutableSequence | None = None
     ) -> bool:
-        """Remove VIP status from the given steam ID"""
+        """Remove VIP status from the given player ID"""
         async with self._get_connection() as conn:
-            result = await conn.remove_vip(steam_id_64=steam_id_64)
+            result = await conn.remove_vip(player_id=player_id)
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
@@ -1333,14 +1321,15 @@ class AsyncRcon:
         _date, _time = raw_timestamp.split("-")
         _time = _time.replace(".", ":")
 
-        return parser.parse(f"{_date} {_time}")
+        timestamp = parser.parse(f"{_date} {_time}")
+        return timestamp.replace(tzinfo=timezone.utc)
 
     @staticmethod
-    def _parse_temp_ban_log(raw_ban: str) -> TemporaryBanType | InvalidTempBanType:
+    def _parse_temp_ban_log(raw_ban: str) -> TemporaryBan | InvalidTempBan:
         """Parse a raw HLL ban log into a TempBanType or InvalidTempBanType
 
         As of HLL v1.13.0.815373 under some (unknown) circumstances the game server will
-        return a temp ban log that includes neither the steam ID or player name:
+        return a temp ban log that includes neither the player ID or player name:
             ex: : banned for 46368 hours on 2023.02.20-17.47.55 for "Homophobic statements are not tolerated." by admin "-Scab"
 
         Temporary ban logs are in the format:
@@ -1350,7 +1339,7 @@ class AsyncRcon:
         # I do not remember what fields are optional?
         if match := re.match(AsyncRcon._temp_ban_log_pattern, raw_ban):
             (
-                steam_id_64,
+                player_id,
                 player_name,
                 duration_hours,
                 raw_timestamp,
@@ -1360,8 +1349,8 @@ class AsyncRcon:
 
             timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
-            ban = TemporaryBanType(
-                steam_id_64=steam_id_64,
+            ban = TemporaryBan(
+                player_id=player_id,
                 player_name=player_name,
                 duration_hours=int(duration_hours),
                 timestamp=timestamp,
@@ -1369,10 +1358,10 @@ class AsyncRcon:
                 admin=admin,
             )
         elif match := re.match(
-            AsyncRcon._temp_ban_log_missing_steam_id_name_pattern, raw_ban
+            AsyncRcon._temp_ban_log_missing_player_id_name_pattern, raw_ban
         ):
             (
-                steam_id_64,
+                player_id,
                 player_name,
                 duration_hours,
                 raw_timestamp,
@@ -1382,8 +1371,8 @@ class AsyncRcon:
 
             timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
-            ban = InvalidTempBanType(
-                steam_id_64=steam_id_64,
+            ban = InvalidTempBan(
+                player_id=player_id,
                 player_name=player_name,
                 duration_hours=int(duration_hours),
                 timestamp=timestamp,
@@ -1397,7 +1386,7 @@ class AsyncRcon:
 
     async def get_temp_bans(
         self, output: MutableSequence | None = None
-    ) -> list[TemporaryBanType | InvalidTempBanType]:
+    ) -> list[TemporaryBan | InvalidTempBan]:
         """Return all the temporary bans on the game server"""
         async with self._get_connection() as conn:
             result = await conn.get_temp_bans()
@@ -1417,7 +1406,7 @@ class AsyncRcon:
         return validated_result
 
     @staticmethod
-    def _parse_perma_ban_log(raw_ban: str) -> PermanentBanType:
+    def _parse_perma_ban_log(raw_ban: str) -> PermanentBan:
         """Parse a raw HLL ban log
 
         Permanent ban logs are in the format:
@@ -1427,7 +1416,7 @@ class AsyncRcon:
         # I do not remember what fields are optional?
         if match := re.match(AsyncRcon._perma_ban_log_pattern, raw_ban):
             (
-                steam_id_64,
+                player_id,
                 player_name,
                 raw_timestamp,
                 reason,
@@ -1436,8 +1425,8 @@ class AsyncRcon:
 
             timestamp = AsyncRcon._parse_ban_log_timestamp(raw_timestamp)
 
-            ban = PermanentBanType(
-                steam_id_64=steam_id_64,
+            ban = PermanentBan(
+                player_id=player_id,
                 player_name=player_name,
                 timestamp=timestamp,
                 reason=reason,
@@ -1450,7 +1439,7 @@ class AsyncRcon:
 
     async def get_permanent_bans(
         self, output: MutableSequence | None = None
-    ) -> list[PermanentBanType]:
+    ) -> list[PermanentBan]:
         """Return all the permanent bans on the game server"""
         async with self._get_connection() as conn:
             result = await conn.get_permanent_bans()
@@ -1473,17 +1462,17 @@ class AsyncRcon:
     async def message_player(
         self,
         message: str,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
         output: MutableSequence | None = None,
     ) -> bool:
         """Send an in game message to the specified player"""
-        if steam_id_64 is None and player_name is None:
-            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
+        if player_id is None and player_name is None:
+            raise ValueError(constants.PLAYER_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
 
         async with self._get_connection() as conn:
             result = await conn.message_player(
-                message=message, steam_id_64=steam_id_64, player_name=player_name
+                message=message, player_id=player_id, player_name=player_name
             )
             logger.debug(
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
@@ -1591,7 +1580,7 @@ class AsyncRcon:
 
     async def temp_ban_player(
         self,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
         duration_hours: int | None = None,
         reason: str | None = None,
@@ -1601,14 +1590,14 @@ class AsyncRcon:
         """Ban a player from the server for the given number of hours and show them the indicated reason
 
         Args
-            steam_id_64: optional if player name is provided
-            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            player_id: optional if player name is provided
+            player_name: optional if player_id is provided, will use player_id if both are passed
             duration_hours: number of hours to ban, will be cleared on game server restart, defaults to 2 if not provided
             reason: optional reason for the ban that is shown to the player
             by_admin_name: optional name for which admin or automated service banned the player
         """
-        if steam_id_64 is None and player_name is None:
-            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
+        if player_id is None and player_name is None:
+            raise ValueError(constants.PLAYER_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
 
         try:
             args = IntegerGreaterOrEqualToOne(value=duration_hours)
@@ -1617,7 +1606,7 @@ class AsyncRcon:
 
         async with self._get_connection() as conn:
             result = await conn.temp_ban_player(
-                steam_id_64=steam_id_64,
+                player_id=player_id,
                 player_name=player_name,
                 duration_hours=args.value,
                 reason=reason,
@@ -1639,7 +1628,7 @@ class AsyncRcon:
 
     async def perma_ban_player(
         self,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
         reason: str | None = None,
         by_admin_name: str | None = None,
@@ -1648,20 +1637,20 @@ class AsyncRcon:
         """Permanently ban a player and show them the indicated reason
 
         Args
-            steam_id_64: optional if player name is provided
-            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            player_id: optional if player name is provided
+            player_name: optional if player_id is provided, will use player_id if both are passed
             reason: optional reason for the ban that is shown to the player
             by_admin_name: optional name for which admin or automated service banned the player
 
         Returns
             SUCCESS or FAIL
         """
-        if steam_id_64 is None and player_name is None:
-            raise ValueError(constants.STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
+        if player_id is None and player_name is None:
+            raise ValueError(constants.PLAYER_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG)
 
         async with self._get_connection() as conn:
             result = await conn.perma_ban_player(
-                steam_id_64=steam_id_64,
+                player_id=player_id,
                 player_name=player_name,
                 reason=reason,
                 by_admin_name=by_admin_name,
@@ -1682,7 +1671,7 @@ class AsyncRcon:
 
     async def remove_temp_ban(
         self,
-        ban_log: str | TemporaryBanType,
+        ban_log: str | TemporaryBan,
         output: MutableSequence | None = None,
     ) -> bool:
         """Remove a temporary ban from a player
@@ -1691,7 +1680,7 @@ class AsyncRcon:
             ban_log: Must match the HLL ban log format returned from get_temp_bans
         """
 
-        if isinstance(ban_log, InvalidTempBanType):
+        if isinstance(ban_log, InvalidTempBan):
             logger.warning(
                 f"{ban_log=} is an InvalidTempBanType, attempting unban regardless"
             )
@@ -1719,7 +1708,7 @@ class AsyncRcon:
 
     async def remove_perma_ban(
         self,
-        ban_log: str | PermanentBanType,
+        ban_log: str | PermanentBan,
         output: MutableSequence | None = None,
     ) -> bool:
         """Remove a permanent ban from a player
@@ -1752,7 +1741,7 @@ class AsyncRcon:
     async def get_idle_kick_time(
         self,
         output: MutableSequence | None = None,
-    ) -> IdleKickTimeType:
+    ) -> IdleKickTime:
         """Return the current idle kick time in minutes"""
         async with self._get_connection() as conn:
             result = await conn.get_idle_kick_time()
@@ -1760,7 +1749,7 @@ class AsyncRcon:
                 f"{id(conn)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function} {result=}"  # type: ignore
             )
 
-        validated_result = IdleKickTimeType(kick_time=result)
+        validated_result = IdleKickTime(kick_time=result)
 
         if output is not None:
             output.append(validated_result)
@@ -1773,7 +1762,7 @@ class AsyncRcon:
         output: MutableSequence | None = None,
     ) -> bool:
         """Set the idle kick time in minutes"""
-        args = IdleKickTimeType(kick_time=threshold_minutes)
+        args = IdleKickTime(kick_time=threshold_minutes)
 
         async with self._get_connection() as conn:
             result = await conn.set_idle_kick_time(threshold_minutes=args.kick_time)
@@ -1794,7 +1783,7 @@ class AsyncRcon:
     async def get_high_ping_limit(
         self,
         output: MutableSequence | None = None,
-    ) -> HighPingLimitType:
+    ) -> HighPingLimit:
         """Return the high ping limit (player is kicked when they exceed) in milliseconds"""
         async with self._get_connection() as conn:
             result = await conn.get_high_ping_limit()
@@ -1803,7 +1792,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = HighPingLimitType(limit=result)
+            validated_result = HighPingLimit(limit=result)
         except ValueError:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
@@ -1820,7 +1809,7 @@ class AsyncRcon:
         output: MutableSequence | None = None,
     ) -> bool:
         """Set the high ping limit (player is kicked when they exceed) in milliseconds"""
-        args = HighPingLimitType(limit=threshold)
+        args = HighPingLimit(limit=threshold)
 
         async with self._get_connection() as conn:
             result = await conn.set_high_ping_limit(threshold=args.limit)
@@ -1862,7 +1851,7 @@ class AsyncRcon:
     async def get_team_switch_cooldown(
         self,
         output: MutableSequence | None = None,
-    ) -> TeamSwitchCoolDownType:
+    ) -> TeamSwitchCoolDown:
         """Return the current team switch cool down in minutes"""
         async with self._get_connection() as conn:
             result = await conn.get_team_switch_cooldown()
@@ -1871,7 +1860,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = TeamSwitchCoolDownType(cooldown=result)
+            validated_result = TeamSwitchCoolDown(cooldown=result)
         except ValueError as e:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
@@ -1889,7 +1878,7 @@ class AsyncRcon:
     ) -> bool:
         """Set the team switch cool down in minutes"""
         try:
-            args = TeamSwitchCoolDownType(cooldown=cooldown)
+            args = TeamSwitchCoolDown(cooldown=cooldown)
         except ValueError as e:
             logger.error(f"{cooldown=} must be a positive integer")
             raise e
@@ -1912,7 +1901,7 @@ class AsyncRcon:
 
     async def get_auto_balance_enabled(
         self, output: MutableSequence | None = None
-    ) -> AutoBalanceStateType:
+    ) -> AutoBalanceState:
         """Return if team auto balance (enforced differences in team sizes) is enabled"""
         async with self._get_connection() as conn:
             result = await conn.get_auto_balance_enabled()
@@ -1921,7 +1910,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = AutoBalanceStateType(state=result)  # type: ignore
+            validated_result = AutoBalanceState(state=result)  # type: ignore
         except ValueError:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
@@ -1970,7 +1959,7 @@ class AsyncRcon:
 
     async def get_auto_balance_threshold(
         self, output: MutableSequence | None = None
-    ) -> AutoBalanceThresholdType:
+    ) -> AutoBalanceState:
         """Return the allowed team size difference before players are forced to join the other team"""
         async with self._get_connection() as conn:
             result = await conn.get_auto_balance_threshold()
@@ -1979,7 +1968,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = AutoBalanceThresholdType(threshold=result)  # type: ignore
+            validated_result = AutoBalanceState(threshold=result)  # type: ignore
         except ValueError:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
@@ -1995,7 +1984,7 @@ class AsyncRcon:
     ) -> bool:
         """Set the allowed team size difference before players are forced to join the other team"""
         try:
-            args = AutoBalanceThresholdType(threshold=threshold)
+            args = AutoBalanceThreshold(threshold=threshold)
         except ValueError as e:
             logger.error(f"{threshold=} must be a positive integer")
             raise e
@@ -2018,7 +2007,7 @@ class AsyncRcon:
 
     async def get_vote_kick_enabled(
         self, output: MutableSequence | None = None
-    ) -> VoteKickStateType:
+    ) -> VoteKickState:
         """Return if vote to kick players is enabled"""
         async with self._get_connection() as conn:
             result = await conn.get_vote_kick_enabled()
@@ -2027,7 +2016,7 @@ class AsyncRcon:
             )
 
         try:
-            validated_result = VoteKickStateType(state=result)  # type: ignore
+            validated_result = VoteKickState(state=result)  # type: ignore
         except ValueError:
             raise ValueError(
                 f"Received an invalid response=`{result}` from the game server"
@@ -2077,19 +2066,19 @@ class AsyncRcon:
     @staticmethod
     def _parse_vote_kick_thresholds(
         raw_thresholds: str,
-    ) -> list[VoteKickThresholdType]:
+    ) -> list[VoteKickThreshold]:
         values = raw_thresholds.split(",")
-        thresholds: list[VoteKickThresholdType] = []
+        thresholds: list[VoteKickThreshold] = []
         for player, vote in zip(values[0::2], values[1::2]):
             thresholds.append(
-                VoteKickThresholdType(player_count=player, votes_required=vote)  # type: ignore
+                VoteKickThreshold(player_count=player, votes_required=vote)  # type: ignore
             )
 
         return thresholds
 
     async def get_vote_kick_thresholds(
         self, output: MutableSequence | None = None
-    ) -> list[VoteKickThresholdType]:
+    ) -> list[VoteKickThreshold]:
         """Return the required number of votes to remove from the server in threshold pairs"""
         async with self._get_connection() as conn:
             result = await conn.get_vote_kick_thresholds()
@@ -2107,7 +2096,7 @@ class AsyncRcon:
 
     @staticmethod
     def _convert_vote_kick_thresholds(
-        thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThresholdType] | str
+        thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThreshold] | str
     ) -> str:
         if thresholds is None or thresholds == "":
             raise ValueError(
@@ -2120,7 +2109,7 @@ class AsyncRcon:
             raw_thresholds = [int(threshhold) for threshhold in split_thresholds]
         else:
             for item in thresholds:
-                if isinstance(item, VoteKickThresholdType):
+                if isinstance(item, VoteKickThreshold):
                     raw_thresholds.append(item.player_count)
                     raw_thresholds.append(item.votes_required)
                 elif isinstance(item, tuple):
@@ -2149,14 +2138,14 @@ class AsyncRcon:
 
     async def set_vote_kick_thresholds(
         self,
-        thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThresholdType] | str,
+        thresholds: Iterable[tuple[int, int]] | Iterable[VoteKickThreshold] | str,
         output: MutableSequence | None = None,
     ) -> bool:
         """Set vote kick threshold pairs, the first entry must be for 0 players
 
         Args
             threshold_pairs: A comma separated list in the form: players, votes required for instance 0,1,10,5
-                means when 10 players are on, 5 votes are required to remove a player or a list of VoteKickThresholdType
+                means when 10 players are on, 5 votes are required to remove a player or a list of VoteKickThreshold
         """
         validated_thresholds = self._convert_vote_kick_thresholds(thresholds)
         async with self._get_connection() as conn:
@@ -2205,7 +2194,7 @@ class AsyncRcon:
     async def get_censored_words(
         self,
         output: MutableSequence | None = None,
-    ) -> list[CensoredWordType]:
+    ) -> list[CensoredWord]:
         """Return a list of all words that will be censored in game chat"""
         async with self._get_connection() as conn:
             result = await conn.get_censored_words()
@@ -2214,7 +2203,7 @@ class AsyncRcon:
             )
 
         validated_result = [
-            CensoredWordType(word=word) for word in AsyncRcon._from_hll_list(result)
+            CensoredWord(word=word) for word in AsyncRcon._from_hll_list(result)
         ]
 
         if output is not None:

@@ -1,6 +1,6 @@
 import pytest
 
-from async_hll_rcon.connection import HllConnection, _player_info_validator
+from hll_rcon.connection import HllConnection, _player_info_validator
 
 
 @pytest.mark.parametrize("timeout, expected", [(1.0, 1.0)])

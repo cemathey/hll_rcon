@@ -1,32 +1,54 @@
-[tool.poetry]
-name = "async-hll-rcon"
+[project]
+name = "hll-rcon"
 version = "0.1.0"
-description = ""
-authors = ["C. Eric Mathey <emathey@protonmail.com>"]
+description = "Add your description here"
+authors = [
+    { name = "C. Eric Mathey", email = "emathey@protonmail.com" }
+]
+dependencies = [
+    "pydantic>=2.9.2",
+    "loguru>=0.7.2",
+    "trio>=0.26.2",
+    "python-dateutil>=2.9.0.post0",
+    "pre-commit>=3.8.0",
+]
 readme = "README.md"
-packages = [{ include = "async_hll_rcon" }]
-
-[tool.poetry.dependencies]
-python = "^3.11"
-trio = "^0.22.0"
-loguru = "^0.6.0"
-python-dateutil = "^2.8.2"
-pydantic = "^2.1.1"
-
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.0.4"
-black = "^23.1.0"
-isort = "^5.12.0"
-pdoc3 = "^0.10.0"
-pytest = "^7.2.1"
+requires-python = ">= 3.8"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "pytest>=8.3.3",
+    "isort>=5.13.2",
+    "black>=24.8.0",
+    "pyright>=1.1.381",
+    "ipython>=8.27.0",
+]
+
+# [tool.rye.scripts]
+# # devserver = { cmd = "flask run --app ./hello.py --debug" }
+# # cli = "hll_rcon:cli"
+# cli = { cmd = ["python", "-m", "hll_rcon.cli"] }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hll_rcon"]
+
 
 [tool.isort]
 profile = "black"
 
-[tool.black]
-include = '\.pyi?$'
+
+# [tool.pytest.ini_options]
+# pythonpath = [
+#   "."
+# ]
+
+# [tool.black]
+# include = '\.pyi?$'

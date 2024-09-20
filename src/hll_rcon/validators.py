@@ -1,9 +1,12 @@
+import pydantic
 from loguru import logger
 
-from async_hll_rcon import constants
-from async_hll_rcon.exceptions import (
-    FailedGameServerResponseError,
-)
+from hll_rcon import constants
+from hll_rcon.exceptions import FailedGameServerResponseError
+
+
+class IntegerGreaterOrEqualToOne(pydantic.BaseModel):
+    value: pydantic.conint(ge=1)  # type: ignore
 
 
 def _success_fail_validator(result: str) -> bool:

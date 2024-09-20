@@ -2,12 +2,12 @@ import inspect
 from itertools import cycle
 from typing import Callable, Self
 
+import pydantic
 import trio
 from loguru import logger
-import pydantic
 
-from async_hll_rcon import constants, exceptions
-from async_hll_rcon.validators import (
+from hll_rcon import constants, exceptions
+from hll_rcon.validators import (
     _gamestate_validator,
     _on_off_validator,
     _player_info_validator,
@@ -114,7 +114,7 @@ class HllConnection:
 
     @staticmethod
     def _xor_encode(
-        message: str | bytes, xor_key: bytes, encoding: str = "utf-8"
+        message: str | bytes | bytearray, xor_key: bytes, encoding: str = "utf-8"
     ) -> bytes:
         """XOR encrypt the given message with the given XOR key"""
         if isinstance(message, str):
@@ -128,7 +128,7 @@ class HllConnection:
         )
 
     @staticmethod
-    def _xor_decode(cipher_text: str | bytes, xor_key: bytes) -> str:
+    def _xor_decode(cipher_text: str | bytes | bytearray, xor_key: bytes) -> str:
         """XOR decrypt the given cipher text with the given XOR key"""
         return HllConnection._xor_encode(cipher_text, xor_key).decode("utf-8")
 
@@ -144,7 +144,7 @@ class HllConnection:
         """Create and return an instance after it has connected to the game server"""
         instance = HllConnection(ip_addr, port, password, receive_timeout, tcp_timeout)
         await instance.connect()
-        return instance
+        return instance  # type: ignore
 
     async def _connect(self) -> None:
         """Open a socket to the game server and retrieve the XOR key"""
@@ -485,8 +485,8 @@ class HllConnection:
         content = f"Get Players"
         return await self._send_to_game_server(content)
 
-    async def get_player_steam_ids(self) -> str:
-        """Return a HLL tab delimited list of player names and steam IDs in the format player_name : steam_id_64"""
+    async def get_player_ids(self) -> str:
+        """Return a HLL tab delimited list of player names and IDs in the format player_name : player_id"""
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
@@ -499,7 +499,7 @@ class HllConnection:
         See also get_admin_groups()
 
         Returns
-            tab delimited list in the form: steam_id_64 role "name"
+            tab delimited list in the form: player_id role "name"
         """
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
@@ -516,9 +516,9 @@ class HllConnection:
         return await self._send_to_game_server(content)
 
     async def add_admin(
-        self, steam_id_64: str, role: str, name: str | None = None
+        self, player_id: str, role: str, name: str | None = None
     ) -> str:
-        """Grant the specified steam ID the specified role
+        """Grant the specified player ID the specified role
 
         Role must be valid, see get_admin_groups()
 
@@ -528,13 +528,13 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"AdminAdd {steam_id_64} {role} {name or ''}"
+        content = f"AdminAdd {player_id} {role} {name or ''}"
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
 
-    async def remove_admin(self, steam_id_64: str) -> str:
-        """Remove all admin roles from the specified steam ID, see get_admin_groups() for possible admin roles
+    async def remove_admin(self, player_id: str) -> str:
+        """Remove all admin roles from the specified player ID, see get_admin_groups() for possible admin roles
 
         Returns
             SUCCESS or FAIL
@@ -542,13 +542,13 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"AdminDel {steam_id_64}"
+        content = f"AdminDel {player_id}"
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
 
     async def get_vip_ids(self) -> str:
-        """Return a HLL tab delimited list of VIP steam ID 64s and names"""
+        """Return a HLL tab delimited list of VIP player IDs and names"""
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
@@ -583,8 +583,8 @@ class HllConnection:
         logger.debug(f"{id(self)} {result=}")
         return result
 
-    async def add_vip(self, steam_id_64: str, name: str | None) -> str:
-        """Grant VIP status to the given steam ID
+    async def add_vip(self, player_id: str, name: str | None) -> str:
+        """Grant VIP status to the given player ID
 
         Returns
             SUCCESS or FAIL
@@ -592,13 +592,13 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"VipAdd {steam_id_64} {name}"
+        content = f"VipAdd {player_id} {name}"
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
 
-    async def remove_vip(self, steam_id_64: str) -> str:
-        """Remove VIP status from the given steam ID
+    async def remove_vip(self, player_id: str) -> str:
+        """Remove VIP status from the given player ID
 
         Returns
             SUCCESS or FAIL
@@ -606,7 +606,7 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f"VipDel {steam_id_64}"
+        content = f"VipDel {player_id}"
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
@@ -630,7 +630,7 @@ class HllConnection:
     async def message_player(
         self,
         message: str,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
     ) -> str:
         """Send an in game message to the specified player
@@ -641,7 +641,7 @@ class HllConnection:
         logger.debug(
             f"{id(self)} {self.__class__.__name__}.{inspect.getframeinfo(inspect.currentframe()).function}()"  # type: ignore
         )
-        content = f'Message "{steam_id_64 or player_name}" "{message}"'
+        content = f'Message "{player_id or player_name}" "{message}"'
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
@@ -704,7 +704,7 @@ class HllConnection:
 
     async def temp_ban_player(
         self,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
         duration_hours: int | None = None,
         reason: str | None = None,
@@ -713,8 +713,8 @@ class HllConnection:
         """Ban a player from the server for the given number of hours and show them the indicated reason
 
         Args
-            steam_id_64: optional if player name is provided
-            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            player_id: optional if player name is provided
+            player_name: optional if player_id is provided, will use player_id if both are passed
             duration_hours: number of hours to ban, will be cleared on game server restart, defaults to 2 if not provided
             reason: optional reason for the ban that is shown to the player
             by_admin_name: optional name for which admin or automated service banned the player
@@ -736,14 +736,14 @@ class HllConnection:
         if by_admin_name is None:
             by_admin_name = ""
 
-        content = f'TempBan "{steam_id_64 or player_name}" {validated_duration} "{reason}" "{by_admin_name}"'
+        content = f'TempBan "{player_id or player_name}" {validated_duration} "{reason}" "{by_admin_name}"'
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )
 
     async def perma_ban_player(
         self,
-        steam_id_64: str | None = None,
+        player_id: str | None = None,
         player_name: str | None = None,
         reason: str | None = None,
         by_admin_name: str | None = None,
@@ -754,8 +754,8 @@ class HllConnection:
         """Permanently ban a player and show them the indicated reason
 
         Args
-            steam_id_64: optional if player name is provided
-            player_name: optional if steam_id_64 is provided, will use steam_id_64 if both are passed
+            player_id: optional if player name is provided
+            player_name: optional if player_id is provided, will use player_id if both are passed
             reason: optional reason for the ban that is shown to the player
             by_admin_name: optional name for which admin or automated service banned the player
 
@@ -769,9 +769,7 @@ class HllConnection:
         if by_admin_name is None:
             by_admin_name = ""
 
-        content = (
-            f'PermaBan "{steam_id_64 or player_name}" "{reason}" "{by_admin_name}"'
-        )
+        content = f'PermaBan "{player_id or player_name}" "{reason}" "{by_admin_name}"'
         return await self._send_to_game_server(
             content, response_validator=_success_fail_validator
         )

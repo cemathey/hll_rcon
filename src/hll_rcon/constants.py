@@ -34,6 +34,6 @@ INVALID_GAME_SERVER_RESPONSE_ERROR_MSG: Final = (
     "Received an invalid response from the game server"
 )
 
-STEAM_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG: Final = (
-    "Must provide at least either a steam ID or player name"
+PLAYER_ID_64_OR_PLAYER_NAME_REQUIRED_ERROR_MSG: Final = (
+    "Must provide at least either a player ID or player name"
 )
