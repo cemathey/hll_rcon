@@ -225,7 +225,7 @@ async def main():
 
     for log in logs:
         if hasattr(log, "player_id"):
-            logger.info(f"type={type(log)} player_id={log.player_id}")
+            logger.info(f"type={type(log)} player_id={log.player_id} id={log.id}")
 
     print(f"{len(logs)=}")
     none_Logs = [l for l in logs if not l]

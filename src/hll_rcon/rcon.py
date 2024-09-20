@@ -530,6 +530,11 @@ class AsyncRcon:
             relative_timestamp=AsyncRcon._relative_time_to_timedelta(relative_time),
         )
 
+        def _hash_log(log: str) -> bytes:
+            import hashlib
+
+            return hashlib.sha1(string=log.encode()).digest()
+
         if raw_log.startswith("KILL") or raw_log.startswith("TEAM KILL"):
             if match := re.match(AsyncRcon._kill_teamkill_pattern, raw_log):
                 (
@@ -554,6 +559,7 @@ class AsyncRcon:
                         victim_team=victim_team,
                         weapon=weapon,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
                 else:
                     return TeamKillLog(
@@ -565,6 +571,7 @@ class AsyncRcon:
                         victim_team=victim_team,
                         weapon=weapon,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
 
         elif raw_log.startswith("CHAT"):
@@ -577,6 +584,7 @@ class AsyncRcon:
                     scope=scope,
                     content=content,
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             else:
                 ValueError(f"Unable to parse `{raw_log}`")
@@ -585,11 +593,17 @@ class AsyncRcon:
                 connected, disconnected, player_name, player_id = match.groups()
                 if connected:
                     return ConnectLog(
-                        player_id=player_id, player_name=player_name, time=time
+                        player_id=player_id,
+                        player_name=player_name,
+                        time=time,
+                        id=_hash_log(log=raw_log),
                     )
                 else:
                     return DisconnectLog(
-                        player_id=player_id, player_name=player_name, time=time
+                        player_id=player_id,
+                        player_name=player_name,
+                        time=time,
+                        id=_hash_log(log=raw_log),
                     )
             else:
                 ValueError(f"Unable to parse `{raw_log}`")
@@ -601,6 +615,7 @@ class AsyncRcon:
                     from_team=from_team,
                     to_team=to_team,
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             else:
                 ValueError(f"Unable to parse `{raw_log}`")
@@ -657,6 +672,7 @@ class AsyncRcon:
                         kick_type=removal_type,
                         reason=removal_reason,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
                 else:
                     if raw_removal_type.startswith(
@@ -688,13 +704,19 @@ class AsyncRcon:
                         ban_duration_hours=ban_duration,
                         reason=removal_reason,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
         elif raw_log.startswith("MATCH"):
             if match := re.match(AsyncRcon._match_start_pattern, raw_log):
                 map_name, game_mode = match.groups()
-                return MatchStartLog(map_name=map_name, game_mode=game_mode, time=time)
+                return MatchStartLog(
+                    map_name=map_name,
+                    game_mode=game_mode,
+                    time=time,
+                    id=_hash_log(log=raw_log),
+                )
             elif match := re.match(AsyncRcon._match_end_pattern, raw_log):
                 map_name, game_mode, allied_score, axis_score = match.groups()
                 return MatchEndLog(
@@ -703,6 +725,7 @@ class AsyncRcon:
                     allied_score=int(allied_score),
                     axis_score=int(axis_score),
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
@@ -715,12 +738,14 @@ class AsyncRcon:
                         player_id=player_id,
                         player_name=player_name,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
                 elif entered_exited == "Left":
                     return ExitedAdminCamLog(
                         player_id=player_id,
                         player_name=player_name,
                         time=time,
+                        id=_hash_log(log=raw_log),
                     )
                 else:
                     raise ValueError(f"invalid {entered_exited=} {raw_log=}")
@@ -734,15 +759,21 @@ class AsyncRcon:
                     vote_type=vote_type,
                     vote_id=int(vote_id),
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             elif match := re.match(AsyncRcon._vote_completed_pattern, raw_log):
                 vote_id, vote_result = match.groups()
                 return VoteKickCompletedStatusLog(
-                    vote_result=vote_result, vote_id=int(vote_id), time=time
+                    vote_result=vote_result,
+                    vote_id=int(vote_id),
+                    time=time,
+                    id=_hash_log(log=raw_log),
                 )
             elif match := re.match(AsyncRcon._vote_expired_pattern, raw_log):
                 vote_id = match.groups()[0]
-                return VoteKickExpiredLog(vote_id=int(vote_id), time=time)
+                return VoteKickExpiredLog(
+                    vote_id=int(vote_id), time=time, id=_hash_log(log=raw_log)
+                )
             elif match := re.match(AsyncRcon._vote_started_pattern, raw_log):
                 player_name, vote_type, victim_player_name, vote_id = match.groups()
                 return VoteKickStartedLog(
@@ -751,6 +782,7 @@ class AsyncRcon:
                     vote_type=vote_type,
                     vote_id=int(vote_id),
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             elif match := re.match(AsyncRcon._vote_results_pattern, raw_log):
                 (
@@ -765,6 +797,7 @@ class AsyncRcon:
                     against_votes=int(against_votes),
                     votes_required=int(votes_required),
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
@@ -776,6 +809,7 @@ class AsyncRcon:
                     player_name=player_name,
                     message=message,
                     time=time,
+                    id=_hash_log(log=raw_log),
                 )
             else:
                 raise ValueError(f"Unable to parse `{raw_log}`")
