@@ -848,7 +848,7 @@ class AsyncRcon:
         minutes: int,
         filter: str | None = None,
         output: MutableSequence | None = None,
-    ) -> GameLogType:
+    ) -> list[GameLogType]:
         """Split and parse raw game logs into aware pydantic.BaseModel types"""
         async with self._get_connection() as conn:
             result = await conn.get_game_logs(minutes=minutes, filter=filter)

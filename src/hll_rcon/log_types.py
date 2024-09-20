@@ -188,7 +188,7 @@ class MessagedPlayerLog(BaseLogModel):
     message: str
 
 
-GameLogType: TypeAlias = list[
+GameLogType: TypeAlias = (
     BanLog
     | ChatLog
     | ConnectLog
@@ -208,4 +208,4 @@ GameLogType: TypeAlias = list[
     | VoteKickResultsLog
     | VoteKickStartedLog
     | None
-]
+)
