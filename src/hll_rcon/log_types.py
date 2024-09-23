@@ -28,6 +28,10 @@ class BaseLogModel(pydantic.BaseModel):
     id: str
 
 
+class UnknownLog(BaseLogModel):
+    raw_text: str
+
+
 class KillLog(BaseLogModel):
     """A game server log line for player kill events"""
 
@@ -207,5 +211,5 @@ GameLogType: TypeAlias = (
     | VoteKickPlayerVoteLog
     | VoteKickResultsLog
     | VoteKickStartedLog
-    | None
+    | UnknownLog
 )

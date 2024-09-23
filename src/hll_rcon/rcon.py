@@ -31,6 +31,7 @@ from hll_rcon.log_types import (
     MessagedPlayerLog,
     TeamKillLog,
     TeamSwitchLog,
+    UnknownLog,
     VoteKickCompletedStatusLog,
     VoteKickExpiredLog,
     VoteKickPlayerVoteLog,
@@ -523,7 +524,7 @@ class AsyncRcon:
         | VoteKickPlayerVoteLog
         | VoteKickResultsLog
         | VoteKickStartedLog
-        | None
+        | UnknownLog
     ):
         """Parse a raw HLL game log instance to an aware pydantic.BaseModel type"""
         time = LogTimeStamp(
@@ -583,7 +584,7 @@ class AsyncRcon:
                     id=log_id,
                 )
             else:
-                ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("CONNECTED") or raw_log.startswith("DISCONNECTED"):
             if match := re.match(AsyncRcon._connect_disconnect_pattern, raw_log):
                 connected, disconnected, player_name, player_id = match.groups()
@@ -602,7 +603,7 @@ class AsyncRcon:
                         id=log_id,
                     )
             else:
-                ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("TEAMSWITCH"):
             if match := re.match(AsyncRcon._teamswitch_pattern, raw_log):
                 action, player_name, from_team, to_team = match.groups()
@@ -614,7 +615,7 @@ class AsyncRcon:
                     id=log_id,
                 )
             else:
-                ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("BAN") or raw_log.startswith("KICK"):
             if match := re.match(AsyncRcon._kick_ban_pattern, raw_log):
                 (
@@ -622,11 +623,9 @@ class AsyncRcon:
                     ban,
                     player_name,
                     raw_removal_type,
-                    # duration,
                     removal_reason,
                 ) = match.groups()
 
-                # removal_reason = None
                 ban_duration = None
 
                 if kick:
@@ -634,7 +633,6 @@ class AsyncRcon:
                         removal_type = constants.IDLE_KICK
                         removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("Host"):
-                        # logger.warning(f"{removal_reason=} {raw_log=}")
                         removal_type = constants.HOST_CLOSED_CONNECTION_KICK
                         removal_reason = raw_removal_type.strip()
                     elif raw_removal_type.startswith("KICKED FOR"):
@@ -658,7 +656,6 @@ class AsyncRcon:
                     else:
                         removal_type = "invalid"
                         logger.error(f"invalid {raw_removal_type=} {raw_log=}")
-                        # raise ValueError(f"invalid {raw_removal_type=} {raw_log=}")
 
                     if removal_reason == "":
                         logger.error(f"invalid {removal_reason=}")
@@ -679,7 +676,6 @@ class AsyncRcon:
                     else:
                         logger.warning(f"no match for {raw_removal_type=}")
 
-                    # logger.warning(f"{ban=} {removal_reason=}")
                     if duration_match := re.match(
                         r"BANNED FOR (\d+) HOURS", raw_removal_type
                     ):
@@ -689,9 +685,6 @@ class AsyncRcon:
                         ban_type = BanLogBan.PERMANENT_BAN
 
                     if removal_reason is None or removal_reason == "":
-                        # logger.error(
-                        #     f"{player_name=} {ban_type=} {ban_duration=} {removal_reason=}"
-                        # )
                         logger.error(f"{raw_log=}")
 
                     return BanLog(
@@ -703,7 +696,7 @@ class AsyncRcon:
                         id=log_id,
                     )
             else:
-                raise ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("MATCH"):
             if match := re.match(AsyncRcon._match_start_pattern, raw_log):
                 map_name, game_mode = match.groups()
@@ -724,7 +717,7 @@ class AsyncRcon:
                     id=log_id,
                 )
             else:
-                raise ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("Player"):
             if match := re.match(AsyncRcon._admin_cam_pattern, raw_log):
                 player_name, player_id, entered_exited = match.groups()
@@ -744,9 +737,9 @@ class AsyncRcon:
                         id=log_id,
                     )
                 else:
-                    raise ValueError(f"invalid {entered_exited=} {raw_log=}")
+                    return UnknownLog(time=time, id=log_id, raw_text=raw_log)
             else:
-                raise ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("VOTESYS"):
             if match := re.match(AsyncRcon._player_voted_pattern, raw_log):
                 player_name, vote_type, vote_id = match.groups()
@@ -794,7 +787,7 @@ class AsyncRcon:
                     id=log_id,
                 )
             else:
-                raise ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         elif raw_log.startswith("MESSAGE"):
             if match := re.match(AsyncRcon._message_player_pattern, raw_log):
                 player_name, player_id, message = match.groups()
@@ -806,10 +799,11 @@ class AsyncRcon:
                     id=log_id,
                 )
             else:
-                raise ValueError(f"Unable to parse `{raw_log}`")
+                return UnknownLog(time=time, id=log_id, raw_text=raw_log)
         else:
             logger.error(f"Unable to parse `{raw_log}` (fell through)")
-            # raise ValueError(f"Unable to parse `{raw_log}` (fell through)")
+
+        return UnknownLog(time=time, id=log_id, raw_text=raw_log)
 
     @staticmethod
     def split_raw_log_lines(
