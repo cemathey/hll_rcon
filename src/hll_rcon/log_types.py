@@ -25,7 +25,7 @@ class LogTimeStamp(pydantic.BaseModel):
 
 class BaseLogModel(pydantic.BaseModel):
     time: LogTimeStamp
-    id: bytes
+    id: str
 
 
 class KillLog(BaseLogModel):
