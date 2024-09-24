@@ -73,6 +73,7 @@ class AutoBalanceThreshold(BaseResponse):
 class IdleKickTime(BaseResponse):
     """The time in minutes before the server kicks an idle player"""
 
+    # TODO: update this to pydantic v2
     kick_time: pydantic.conint(ge=0)  # type: ignore
 
 
@@ -202,7 +203,7 @@ class MapRotation(BaseResponse):
     maps: list[str]
 
 
-class AdminGroup(BaseResponse):
+class AdminGroup(pydantic.BaseModel):
     """A HLL console role (owner, senior, junior, spectator)"""
 
     role: str
@@ -240,14 +241,14 @@ class PlayerScore(BaseResponse):
     support: int = pydantic.Field(default=0)
 
 
-class Squad(BaseResponse):
+class Squad(pydantic.BaseModel):
     """A players squad id and name as returned by the PlayerInfo command"""
 
     unit_id: int
     unit_name: str
 
 
-class Player(BaseResponse):
+class Player(pydantic.BaseModel):
     player_name: str
     player_id: str
 
