@@ -226,12 +226,12 @@ class VipId(pydantic.BaseModel):
 class PlayerScore(pydantic.BaseModel):
     """A players score as returned by the PlayerInfo command"""
 
-    kills: int
-    deaths: int
-    combat: int
-    offensive: int
-    defensive: int
-    support: int
+    kills: int = pydantic.Field(default=0)
+    deaths: int = pydantic.Field(default=0)
+    combat: int = pydantic.Field(default=0)
+    offensive: int = pydantic.Field(default=0)
+    defensive: int = pydantic.Field(default=0)
+    support: int = pydantic.Field(default=0)
 
 
 class Squad(pydantic.BaseModel):
