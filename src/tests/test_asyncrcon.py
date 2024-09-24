@@ -654,7 +654,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
                 player_id="76561199023123456",
                 player_name="(WTH) Abu",
                 duration_hours=2,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2021,
                     month=12,
                     day=9,
@@ -673,7 +673,7 @@ def test_ban_list_timestamp_conversion(raw, expected):
                 player_id="76561199023123456",
                 player_name=None,
                 duration_hours=2,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2021,
                     month=12,
                     day=9,
@@ -700,7 +700,7 @@ def test_temp_ban_parsing(raw, expected):
             PermanentBan(
                 player_id="76561197975123456",
                 player_name="Georgij Zhukov Sovie",
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2022,
                     month=12,
                     day=6,
@@ -718,7 +718,7 @@ def test_temp_ban_parsing(raw, expected):
             PermanentBan(
                 player_id="76561197975123456",
                 player_name=None,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2022,
                     month=12,
                     day=6,

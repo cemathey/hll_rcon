@@ -1,6 +1,6 @@
 """Models for game server command responses"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import TypeAlias
 
@@ -9,81 +9,87 @@ import pydantic
 from hll_rcon import constants
 
 
-class ServerName(pydantic.BaseModel):
+class BaseResponse(pydantic.BaseModel):
+    timestamp: pydantic.AwareDatetime = pydantic.Field(
+        default_factory=lambda: datetime.now(tz=timezone.utc)
+    )
+
+
+class ServerName(BaseResponse):
     """The servers name"""
 
     name: str
 
 
-class MaxQueueSize(pydantic.BaseModel):
+class MaxQueueSize(BaseResponse):
     """The maximum number of players that can queue to join"""
 
     size: int
 
 
-class NumVipSlots(pydantic.BaseModel):
+class NumVipSlots(BaseResponse):
     """The number of reserved VIP slots"""
 
     count: int
 
 
-class VoteKickThreshold(pydantic.BaseModel):
+class VoteKickThreshold(BaseResponse):
     """A player count and required votes threshold"""
 
     player_count: int
     votes_required: int
 
 
-class HighPingLimit(pydantic.BaseModel):
+class HighPingLimit(BaseResponse):
     """The maximum ping a player can have before being kicked"""
 
     limit: pydantic.conint(ge=0)  # type: ignore
 
 
-class VoteKickState(pydantic.BaseModel):
+class VoteKickState(BaseResponse):
     """Whether vote kicks are turned on"""
 
     state: bool
 
 
-class TeamSwitchCoolDown(pydantic.BaseModel):
+class TeamSwitchCoolDown(BaseResponse):
     """The minimum time in minutes before a player can switch teams"""
 
     cooldown: pydantic.conint(ge=0)  # type: ignore
 
 
-class AutoBalanceState(pydantic.BaseModel):
+class AutoBalanceState(BaseResponse):
     """Whether the auto balance (team size enforcement) is enabled"""
 
     state: bool
 
 
-class AutoBalanceThreshold(pydantic.BaseModel):
+class AutoBalanceThreshold(BaseResponse):
     """The maximum allowed difference in team sizes for players joining a team"""
 
     threshold: pydantic.conint(ge=0)  # type: ignore
 
 
-class IdleKickTime(pydantic.BaseModel):
+class IdleKickTime(BaseResponse):
     """The time in minutes before the server kicks an idle player"""
 
     kick_time: pydantic.conint(ge=0)  # type: ignore
 
 
-class ServerPlayerSlots(pydantic.BaseModel):
+class ServerPlayerSlots(BaseResponse):
     """The current and max number of players"""
 
     current_players: int
     max_players: int
 
 
-class TemporaryBan(pydantic.BaseModel):
+class TemporaryBan(BaseResponse):
     """Represents HLL's format for a temporary ban"""
 
     player_id: str
     player_name: str | None
     duration_hours: int
-    timestamp: datetime
+    ban_timestamp: datetime
     reason: str | None
     admin: str | None
 
@@ -97,7 +103,7 @@ class TemporaryBan(pydantic.BaseModel):
         else:
             player_name = ""
 
-        timestamp = ban_log.timestamp.strftime("%Y.%m.%d-%H.%M.%S")
+        timestamp = ban_log.ban_timestamp.strftime("%Y.%m.%d-%H.%M.%S")
 
         if ban_log.reason is not None:
             reason = f" for {ban_log.reason}"
@@ -115,23 +121,23 @@ class TemporaryBan(pydantic.BaseModel):
         return self.temp_ban_log_to_str(self)
 
 
-class InvalidTempBan(pydantic.BaseModel):
+class InvalidTempBan(BaseResponse):
     """As of HLL v1.13.0.815373 it's possible for the game server to send back ban logs missing steam IDs"""
 
     player_id: str | None
     player_name: str | None
     duration_hours: int
-    timestamp: datetime
+    ban_timestamp: datetime
     reason: str | None
     admin: str | None
 
 
-class PermanentBan(pydantic.BaseModel):
+class PermanentBan(BaseResponse):
     """Represents HLL's format for a permanent ban"""
 
     player_id: str
     player_name: str | None
-    timestamp: datetime
+    ban_timestamp: datetime
     reason: str | None
     admin: str | None
 
@@ -144,7 +150,7 @@ class PermanentBan(pydantic.BaseModel):
         else:
             player_name = ""
 
-        timestamp = ban_log.timestamp.strftime("%Y.%m.%d-%H.%M.%S")
+        timestamp = ban_log.ban_timestamp.strftime("%Y.%m.%d-%H.%M.%S")
 
         if ban_log.reason is not None:
             reason = f" for {ban_log.reason}"
@@ -164,7 +170,7 @@ class PermanentBan(pydantic.BaseModel):
         return self.perma_ban_log_to_str(self)
 
 
-class GameState(pydantic.BaseModel):
+class GameState(BaseResponse):
     """The result of the GameState command showing"""
 
     allied_players: int
@@ -176,27 +182,27 @@ class GameState(pydantic.BaseModel):
     next_map: str
 
 
-class CensoredWord(pydantic.BaseModel):
+class CensoredWord(BaseResponse):
     """A word that is censored in game chat (replaced by *)"""
 
     word: str
 
 
-class AvailableMaps(pydantic.BaseModel):
+class AvailableMaps(BaseResponse):
     """All of the available maps as returned by the game server"""
 
     # TODO: change this to layers
     maps: list[str]
 
 
-class MapRotation(pydantic.BaseModel):
+class MapRotation(BaseResponse):
     """A collection of map names"""
 
     # TODO: change this to layers
     maps: list[str]
 
 
-class AdminGroup(pydantic.BaseModel):
+class AdminGroup(BaseResponse):
     """A HLL console role (owner, senior, junior, spectator)"""
 
     role: str
@@ -208,7 +214,7 @@ class AdminGroup(pydantic.BaseModel):
         return v
 
 
-class AdminId(pydantic.BaseModel):
+class AdminId(BaseResponse):
     """The steam id, name and role of a HLL admin"""
 
     player_id: str
@@ -216,14 +222,14 @@ class AdminId(pydantic.BaseModel):
     role: AdminGroup
 
 
-class VipId(pydantic.BaseModel):
+class VipId(BaseResponse):
     """The steam ID and free form text name of a server VIP"""
 
     player_id: str
     name: str
 
 
-class PlayerScore(pydantic.BaseModel):
+class PlayerScore(BaseResponse):
     """A players score as returned by the PlayerInfo command"""
 
     kills: int = pydantic.Field(default=0)
@@ -234,19 +240,19 @@ class PlayerScore(pydantic.BaseModel):
     support: int = pydantic.Field(default=0)
 
 
-class Squad(pydantic.BaseModel):
+class Squad(BaseResponse):
     """A players squad id and name as returned by the PlayerInfo command"""
 
     unit_id: int
     unit_name: str
 
 
-class Player(pydantic.BaseModel):
+class Player(BaseResponse):
     player_name: str
     player_id: str
 
 
-class PlayerInfo(pydantic.BaseModel):
+class PlayerInfo(BaseResponse):
     """A players metadata as returned by the PlayerInfo command"""
 
     player_name: str

@@ -1381,7 +1381,7 @@ class AsyncRcon:
                 player_id=player_id,
                 player_name=player_name,
                 duration_hours=int(duration_hours),
-                timestamp=timestamp,
+                ban_timestamp=timestamp,
                 reason=reason,
                 admin=admin,
             )
@@ -1403,7 +1403,7 @@ class AsyncRcon:
                 player_id=player_id,
                 player_name=player_name,
                 duration_hours=int(duration_hours),
-                timestamp=timestamp,
+                ban_timestamp=timestamp,
                 reason=reason,
                 admin=admin,
             )
@@ -1456,7 +1456,7 @@ class AsyncRcon:
             ban = PermanentBan(
                 player_id=player_id,
                 player_name=player_name,
-                timestamp=timestamp,
+                ban_timestamp=timestamp,
                 reason=reason,
                 admin=admin,
             )

@@ -13,7 +13,7 @@ from hll_rcon.response_types import PermanentBan, TemporaryBan
                 player_id="76561198004123456",
                 player_name=None,
                 duration_hours=2,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=13, minute=44, second=32
                 ),
                 reason=None,
@@ -26,7 +26,7 @@ from hll_rcon.response_types import PermanentBan, TemporaryBan
                 player_id="76561198004123456",
                 player_name="NoodleArms",
                 duration_hours=2,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=13, minute=44, second=32
                 ),
                 reason=None,
@@ -39,7 +39,7 @@ from hll_rcon.response_types import PermanentBan, TemporaryBan
                 player_id="76561198004123456",
                 player_name="",
                 duration_hours=2,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=15, minute=23, second=26
                 ),
                 reason=None,
@@ -60,7 +60,7 @@ def test_temp_ban_log_to_str(raw, expected):
             PermanentBan(
                 player_id="76561198004123456",
                 player_name=None,
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=13, minute=44, second=32
                 ),
                 reason=None,
@@ -72,7 +72,7 @@ def test_temp_ban_log_to_str(raw, expected):
             PermanentBan(
                 player_id="76561198004123456",
                 player_name="NoodleArms",
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=13, minute=44, second=32
                 ),
                 reason=None,
@@ -84,7 +84,7 @@ def test_temp_ban_log_to_str(raw, expected):
             PermanentBan(
                 player_id="76561198004123456",
                 player_name="",
-                timestamp=datetime(
+                ban_timestamp=datetime(
                     year=2023, month=3, day=6, hour=15, minute=23, second=26
                 ),
                 reason=None,
