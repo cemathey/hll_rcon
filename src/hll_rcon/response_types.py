@@ -230,7 +230,7 @@ class VipId(BaseResponse):
     name: str
 
 
-class PlayerScore(BaseResponse):
+class PlayerScore(pydantic.BaseModel):
     """A players score as returned by the PlayerInfo command"""
 
     kills: int = pydantic.Field(default=0)

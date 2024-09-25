@@ -848,7 +848,7 @@ class AsyncRcon:
         if result == constants.EMPTY_RESPONSE:
             return []
         else:
-            logs = []
+            logs: list[GameLogType] = []
             num_logs_at_timestamp = defaultdict(int)
             for raw_log, relative_time, absolute_time in AsyncRcon.split_raw_log_lines(
                 result
@@ -865,7 +865,7 @@ class AsyncRcon:
         if output is not None:
             output.append(logs)
 
-        return logs
+        return sorted(logs, key=lambda l: l.time.absolute_timestamp)
 
     async def get_current_map(self, output: MutableSequence | None = None) -> str:
         """Return the current map name"""
