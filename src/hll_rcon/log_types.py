@@ -115,14 +115,14 @@ class MatchStartLog(BaseLogModel):
     """A game server log line for the start of a match"""
 
     map_name: str
-    game_mode: str
+    # game_mode: str
 
 
 class MatchEndLog(BaseLogModel):
     """A game server log line for the end of a match"""
 
     map_name: str
-    game_mode: str
+    # game_mode: str
     allied_score: int
     axis_score: int
 

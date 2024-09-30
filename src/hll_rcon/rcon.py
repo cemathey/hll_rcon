@@ -116,7 +116,7 @@ class AsyncRcon:
         r"VOTESYS: Vote Kick {(.*)} successfully passed. \[For: (\d+)\/(\d+) - Against: (\d+)"
     )
     _admin_cam_pattern = r"Player \[(.*) \((.*)\)\] (Entered|Left) Admin Camera"
-    _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE)")
+    _match_start_pattern = re.compile(r"MATCH START (.*) (WARFARE|OFFENSIVE|SKIRMISH)")
     _match_end_pattern = re.compile(
         r"MATCH ENDED `(.*) (WARFARE|OFFENSIVE)` ALLIED \((\d) - (\d)"
     )
@@ -702,7 +702,7 @@ class AsyncRcon:
                 map_name, game_mode = match.groups()
                 return MatchStartLog(
                     map_name=map_name,
-                    game_mode=game_mode,
+                    # game_mode=game_mode,
                     time=time,
                     id=log_id,
                 )
@@ -710,7 +710,7 @@ class AsyncRcon:
                 map_name, game_mode, allied_score, axis_score = match.groups()
                 return MatchEndLog(
                     map_name=map_name,
-                    game_mode=game_mode,
+                    # game_mode=game_mode,
                     allied_score=int(allied_score),
                     axis_score=int(axis_score),
                     time=time,
