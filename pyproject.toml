@@ -1,0 +1,26 @@
+[project]
+name = "hll-rcon"
+version = "0.1.0"
+description = "A Python implementation of the Hell Let Loose RCON V2 Protocol"
+authors = [
+    {name = "C. Eric Mathey",email = "emathey@protonmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "loguru (>=0.7.3,<0.8.0)",
+    "pydantic (>=2.11.1,<3.0.0)",
+    "typer (>=0.15.2,<0.16.0)",
+    "orjson (>=3.10.16,<4.0.0)"
+]
+
+[tool.poetry]
+
+[tool.poetry.group.dev.dependencies]
+isort = "^6.0.1"
+black = "^25.1.0"
+pre-commit = "^4.2.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
