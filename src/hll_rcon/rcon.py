@@ -1,11 +1,16 @@
 from hll_rcon.connection import HLLConnection
 from hll_rcon.types.server_requests import ContentBody
-from hll_rcon.types.server_responses import RconResponse, RconCommandResponse
+from hll_rcon.types.server_responses import (
+    RconResponse,
+    RconCommandResponse,
+    ClientReferenceDataResponse,
+)
 import orjson
 from hll_rcon.types.constants import Platform, RconCommands, ServerInformationCommands
 import hll_rcon.types.server_responses as responses
-
+import json
 from loguru import logger
+from hll_rcon.types import maps
 
 
 class BaseRcon:
@@ -30,6 +35,13 @@ class BaseRcon:
         new_commands: set[str] = set(cmd for cmd in commands if cmd not in RconCommands)
         return new_commands
 
+    def get_client_reference_data(self, command_id: str) -> ClientReferenceDataResponse:
+        response = self.connection.request(
+            RconCommands.CLIENT_REFERENCE_DATA, command_id
+        ).body
+
+        return ClientReferenceDataResponse.model_validate_json(response)
+
     # Console Admin Commands
 
     def add_admin(self):
@@ -39,6 +51,19 @@ class BaseRcon:
         raise NotImplementedError
 
     # Map Rotation Commands
+
+    def get_available_maps(self) -> list[maps.Layer]:
+        # Any of the commands dealing with the rotation when queried will
+        # respond with the available maps
+        response = self.get_client_reference_data(RconCommands.ADD_MAP_TO_ROTATION)
+        raw_maps: list[str] = []
+        for param in response.parameters:
+            if param.id == "MapName":
+                raw_maps: list[str] = param.as_list()
+
+        # This intentionally fails and bubbles up a KeyError if we are missing a map
+        # so we know we have an issue and can add the new map
+        return [maps.LAYERS[map_id.lower()] for map_id in raw_maps]
 
     def add_map_to_rotation(self):
         raise NotImplementedError
@@ -205,10 +230,19 @@ class Rcon(BaseRcon):
     def get_players(self):
         response = self.server_information(ServerInformationCommands.PLAYERS)
 
+        # logger.info(f"{orjson.dumps(orjson.loads(response.body))}")
+
         raw_players = orjson.loads(response.body)["players"]
         parsed_players: dict[str, responses.Player] = {}
-        for p in raw_players:
-            player = responses.Player.model_validate(p)
+        for player in raw_players:
+            # Adjust the raw player to match our pydantic model
+            player["scoreData"]["kills"] = player["kills"]
+            player["scoreData"]["deaths"] = player["deaths"]
+            # TODO: do this a better way
+            player["worldPosition"]["vertical_map"] = True
+            del player["kills"]
+            del player["deaths"]
+            player = responses.Player.model_validate(player)
             parsed_players[player.player_id] = player
 
         return responses.PlayersResponse(players=parsed_players)

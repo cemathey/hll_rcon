@@ -1,11 +1,5 @@
-import pydantic
 from loguru import logger
-import array
-import logging
 import socket
-import uuid
-from threading import get_ident
-from enum import IntEnum, StrEnum
 import pydantic
 import struct
 from itertools import cycle, count
@@ -78,7 +72,7 @@ class HLLConnection:
         body = request.model_dump_json(by_alias=True)
         return self._xor_encode(body)
 
-    def request(self, command: str, body: ContentBody | None) -> RconResponse:
+    def request(self, command: str, body: ContentBody | str | None) -> RconResponse:
         """Make a request to the game server"""
         if self.auth_token is None:
             raise HLLAuthError
@@ -116,6 +110,7 @@ class HLLConnection:
             raw_content.extend(chunk)
 
         content = self._xor_decode(raw_content)
+        logger.debug(f"received: {content}")
         # Validate the response format or bubble up a ValidationError
         response = RconResponse.model_validate_json(content)
 
