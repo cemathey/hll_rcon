@@ -3,18 +3,15 @@ from hll_rcon.types.server_requests import (
     AddAdminCommand,
     RemoveAdminCommand,
 )
-from hll_rcon.types.server_responses import (
-    RconResponse,
-    RconCommandResponse,
-    ClientReferenceDataResponse,
-)
 import orjson
 from hll_rcon.types.constants import Platform, RconCommands, ServerInformationCommands
 import hll_rcon.types.server_responses as responses
-import json
-from loguru import logger
 from hll_rcon.types import maps
-from hll_rcon.utils import valid_player_id_or_throw, valid_admin_group_or_throw
+from hll_rcon.utils import (
+    valid_player_id_or_throw,
+    valid_admin_group_or_throw,
+    adjust_player_dict,
+)
 from typing import Callable
 from hll_rcon.types import constants
 
@@ -48,12 +45,12 @@ class BaseRcon:
         self.connection = HLLConnection()
         self.connection.connect(host, port, password)
 
-    def get_all_commands(self) -> dict[str, RconCommandResponse]:
+    def get_all_commands(self) -> dict[str, responses.RconCommandResponse]:
         """Discover all queryable RCON commands from the server"""
         response = self.connection.request(RconCommands.DISPLAYABLE_COMMANDS, None)
         body = orjson.loads(response.body)
         return {
-            cmd["iD"]: RconCommandResponse.model_validate(cmd)
+            cmd["iD"]: responses.RconCommandResponse.model_validate(cmd)
             for cmd in body["entries"]
         }
 
@@ -63,12 +60,14 @@ class BaseRcon:
         new_commands: set[str] = set(cmd for cmd in commands if cmd not in RconCommands)
         return new_commands
 
-    def get_client_reference_data(self, command_id: str) -> ClientReferenceDataResponse:
+    def get_client_reference_data(
+        self, command_id: str
+    ) -> responses.ClientReferenceDataResponse:
         response = self.connection.request(
             RconCommands.CLIENT_REFERENCE_DATA, command_id
         ).body
 
-        return ClientReferenceDataResponse.model_validate_json(response)
+        return responses.ClientReferenceDataResponse.model_validate_json(response)
 
     # Console Admin Commands
     @check_param("player_id", valid_player_id_or_throw)
@@ -208,7 +207,7 @@ class BaseRcon:
 
     def server_information(
         self, command: ServerInformationCommands, value: str | None = None
-    ) -> RconResponse:
+    ) -> responses.RconResponse:
         return self.connection.request(
             command=RconCommands.SERVER_INFORMATION,
             body={"Name": command, "Value": value},
@@ -266,28 +265,24 @@ class Rcon(BaseRcon):
     # Map Sequence Commands
 
     # Player Commands
-
-    def get_player(self, player_id: str):
+    def get_player(self, player_id: str) -> responses.Player:
         response = self.server_information(
             ServerInformationCommands.PLAYER, value=player_id
         )
-        return orjson.dumps(orjson.loads(response.body))
+        raw_player = orjson.loads(response.body)
+        adjust_player_dict(raw_player)
+        return responses.Player.model_validate(raw_player)
 
-    def get_players(self):
-        response = self.server_information(ServerInformationCommands.PLAYERS)
-
-        # logger.info(f"{orjson.dumps(orjson.loads(response.body))}")
+    def get_players(self) -> responses.PlayersResponse:
+        response: responses.RconResponse = self.server_information(
+            ServerInformationCommands.PLAYERS
+        )
 
         raw_players = orjson.loads(response.body)["players"]
         parsed_players: dict[str, responses.Player] = {}
         for player in raw_players:
             # Adjust the raw player to match our pydantic model
-            player["scoreData"]["kills"] = player["kills"]
-            player["scoreData"]["deaths"] = player["deaths"]
-            # TODO: do this a better way
-            player["worldPosition"]["vertical_map"] = True
-            del player["kills"]
-            del player["deaths"]
+            adjust_player_dict(player)
             player = responses.Player.model_validate(player)
             parsed_players[player.player_id] = player
 
