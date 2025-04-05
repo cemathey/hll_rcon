@@ -5,6 +5,7 @@ from loguru import logger
 from typing import Final
 
 from hll_rcon.connection import HLLConnection
+from hll_rcon.types.constants import AdminGroup
 from hll_rcon.types.server_responses import SessionInfo
 from hll_rcon.rcon import Rcon
 
@@ -66,4 +67,12 @@ if __name__ == "__main__":
     # logger.info("Body=")
     # pprint(body)
 
-    maps = rcon.get_available_maps()
+    # maps = rcon.get_available_maps()
+
+    logger.info(rcon.get_console_admins())
+    rcon.remove_admin(player_id="76561198004895814")
+    logger.info(rcon.get_console_admins())
+    rcon.add_admin(
+        player_id="76561198004895814", group=AdminGroup.SPECTATOR, comment="test"
+    )
+    logger.info(rcon.get_console_admins())

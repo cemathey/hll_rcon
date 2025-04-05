@@ -7,6 +7,7 @@ from loguru import logger
 from hll_rcon.types import constants
 import math
 from enum import StrEnum
+import orjson
 
 
 class RconResponse(BaseModel):
@@ -17,6 +18,17 @@ class RconResponse(BaseModel):
     version: int = Field(validation_alias="version")
     command: str = Field(validation_alias="name")
     body: str = Field(validation_alias="contentBody")
+
+    @field_validator("body")
+    @classmethod
+    def strip_whitespace(cls, body: str) -> str:
+        # This is a bit silly but the game server returns a ton of extraneous whitespace
+        # and makes it difficult to read the logging
+        # TODO: only do this if the log level is DEBUG
+        try:
+            return orjson.dumps(orjson.loads(body)).decode()
+        except orjson.JSONDecodeError:
+            return body
 
     class Config:
         populate_by_name = True

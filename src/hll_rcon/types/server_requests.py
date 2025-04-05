@@ -1,22 +1,27 @@
 from enum import IntEnum, StrEnum
 import pydantic
 
-from hll_rcon.types.constants import RCON_PROTOCOL_VERSION, ServerInformationCommands
+from typing import Any
+from hll_rcon.types.constants import (
+    RCON_PROTOCOL_VERSION,
+    ServerInformationCommands,
+    AdminGroup,
+)
+import orjson
 
 
-class ContentBody(pydantic.BaseModel):
-    """Models the `ContentBody` field on a request to the game server
+class BaseCommand(pydantic.BaseModel):
+    """Empty class to allow type checking through inheritance"""
 
-    Some commands such as `ServerInformation` require a JSON object payload
-    to determine which specific command to run (i.e. query players,
-    serverconfig (v1 gamestate), etc.)
 
-    In all cases this object is serialized to a JSON string regardless of
-    the specific command format
-    """
+class AddAdminCommand(BaseCommand):
+    player_id: str = pydantic.Field(serialization_alias="PlayerId")
+    group: AdminGroup
+    comment: str
 
-    name: ServerInformationCommands = pydantic.Field(serialization_alias="Name")
-    value: str | None = pydantic.Field(default=None, serialization_alias="Value")
+
+class RemoveAdminCommand(BaseCommand):
+    player_id: str = pydantic.Field(serialization_alias="PlayerId")
 
 
 class RconRequest(pydantic.BaseModel):
@@ -27,18 +32,20 @@ class RconRequest(pydantic.BaseModel):
         default=RCON_PROTOCOL_VERSION, serialization_alias="Version"
     )
     command: str = pydantic.Field(serialization_alias="Name")
-    body: ContentBody | str | None = pydantic.Field(serialization_alias="ContentBody")
+    body: dict[str, Any] | str | None = pydantic.Field(
+        serialization_alias="ContentBody"
+    )
 
     class Config:
         populate_by_name = True
 
     @pydantic.field_serializer("body")
-    def serialize_body(self, body: ContentBody | str | None):
+    def serialize_body(self, body: dict[str, Any] | str | None) -> bytes | str:
         """The server always expects a string for the content body"""
         if body is None:
             return ""
-        elif isinstance(body, ContentBody):
-            return body.model_dump_json()
+        elif isinstance(body, dict):
+            return orjson.dumps(body)
         elif isinstance(body, str):
             return body
         else:

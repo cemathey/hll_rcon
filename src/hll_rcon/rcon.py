@@ -1,5 +1,8 @@
 from hll_rcon.connection import HLLConnection
-from hll_rcon.types.server_requests import ContentBody
+from hll_rcon.types.server_requests import (
+    AddAdminCommand,
+    RemoveAdminCommand,
+)
 from hll_rcon.types.server_responses import (
     RconResponse,
     RconCommandResponse,
@@ -11,6 +14,31 @@ import hll_rcon.types.server_responses as responses
 import json
 from loguru import logger
 from hll_rcon.types import maps
+from hll_rcon.utils import valid_player_id_or_throw, valid_admin_group_or_throw
+from typing import Callable
+from hll_rcon.types import constants
+
+
+def check_param(param_name: str, validator_func: Callable):
+    def decorator(method):
+        def wrapper(self, *args, **kwargs):
+            if param_name in kwargs:
+                value = kwargs[param_name]
+            else:
+                param_position = list(method.__code__.co_varnames).index(param_name) - 1
+                if param_position < len(args):
+                    value = args[param_position]
+                else:
+                    return method(self, *args, **kwargs)
+
+                # Bubble up exceptions
+                validator_func(value)
+
+            return method(self, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 class BaseRcon:
@@ -43,12 +71,30 @@ class BaseRcon:
         return ClientReferenceDataResponse.model_validate_json(response)
 
     # Console Admin Commands
+    @check_param("player_id", valid_player_id_or_throw)
+    @check_param("group", valid_admin_group_or_throw)
+    def add_admin(self, *, player_id: str, group: constants.AdminGroup, comment: str):
+        self.connection.request(
+            RconCommands.ADD_ADMIN,
+            body=AddAdminCommand(
+                player_id=player_id, group=group, comment=comment
+            ).model_dump(by_alias=True),
+        )
 
-    def add_admin(self):
-        raise NotImplementedError
+    @check_param("player_id", valid_player_id_or_throw)
+    def remove_admin(self, *, player_id: str):
+        self.connection.request(
+            RconCommands.REMOVE_ADMIN,
+            body=RemoveAdminCommand(player_id=player_id).model_dump(by_alias=True),
+        )
 
-    def remove_admin(self):
-        raise NotImplementedError
+    def get_console_admins(self) -> list[str]:
+        response = self.get_client_reference_data(RconCommands.REMOVE_ADMIN)
+        player_ids: list[str] = []
+        for param in response.parameters:
+            if param.id == "PlayerId":
+                player_ids = param.as_list()
+        return player_ids
 
     # Map Rotation Commands
 
@@ -165,7 +211,7 @@ class BaseRcon:
     ) -> RconResponse:
         return self.connection.request(
             command=RconCommands.SERVER_INFORMATION,
-            body=ContentBody(name=command, value=value),
+            body={"Name": command, "Value": value},
         )
 
     # Intentionally Not Implemented Commands

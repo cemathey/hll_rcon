@@ -10,9 +10,25 @@ from hll_rcon.types.constants import (
     RCON_PROTOCOL_VERSION,
 )
 from hll_rcon.types.constants import RconResponseStatusCode
-from hll_rcon.types.server_requests import RconRequest, ContentBody
+from hll_rcon.types.server_requests import RconRequest, BaseCommand
 from hll_rcon.types.server_responses import RconResponse
 from hll_rcon.exceptions import HLLAuthError, HLLBadCommand, HLLGameServerError
+from typing import Any
+import orjson
+
+
+def raise_for_status(status_code: int, status_message: str):
+    """Mimic httpx function and raise an error if the server responds with a non 200 status code"""
+    if status_code == RconResponseStatusCode.OK:
+        return
+    if status_code == RconResponseStatusCode.BAD_REQUEST:
+        raise HLLBadCommand(status_message)
+    if status_code == RconResponseStatusCode.UNAUTHORIZED:
+        raise HLLAuthError(status_message)
+    if status_code == RconResponseStatusCode.SERVER_ERROR:
+        raise HLLAuthError(status_message)
+
+    raise ValueError(f"Unhandled {status_code=} {status_message}")
 
 
 class HLLConnection:
@@ -26,9 +42,11 @@ class HLLConnection:
 
     def __init__(
         self,
+        raise_for_status: bool = True,
         protocol_version: int = RCON_PROTOCOL_VERSION,
         timeout: float | None = None,
     ) -> None:
+        self.raise_for_status = raise_for_status
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.settimeout(timeout)
         self.protocol_version: int = protocol_version
@@ -72,12 +90,18 @@ class HLLConnection:
         body = request.model_dump_json(by_alias=True)
         return self._xor_encode(body)
 
-    def request(self, command: str, body: ContentBody | str | None) -> RconResponse:
+    def request(self, command: str, body: str | dict[str, Any] | None) -> RconResponse:
         """Make a request to the game server"""
         if self.auth_token is None:
             raise HLLAuthError
 
-        return self.send(RconRequest(command=command, body=body, auth=self.auth_token))
+        response = self.send(
+            RconRequest(command=command, body=body, auth=self.auth_token)
+        )
+
+        if self.raise_for_status:
+            raise_for_status(response.status_code, response.status_msg)
+        return response
 
     def send(self, request: RconRequest) -> RconResponse:
         """Encode/send the request to the game server"""
@@ -110,9 +134,9 @@ class HLLConnection:
             raw_content.extend(chunk)
 
         content = self._xor_decode(raw_content)
-        logger.debug(f"received: {content}")
         # Validate the response format or bubble up a ValidationError
         response = RconResponse.model_validate_json(content)
+        logger.debug(f"received: {response.model_dump()}")
 
         match response.status_code:
             case RconResponseStatusCode.BAD_REQUEST:

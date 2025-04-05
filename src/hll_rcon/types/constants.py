@@ -47,6 +47,12 @@ class RconCommands(StrEnum):
     VOTE_KICK_THRESHOLD = "VoteKickThreshold"
 
 
+class RconParameterNames(StrEnum):
+    PLAYER_ID = "PlayerId"
+    ADMIN_GROUP = "AdminGroup"
+    COMMENT = "Comment"
+
+
 class ClientReferenceDataParameterType(StrEnum):
     COMBO = "combo"
     NUMBER = "number"
@@ -144,3 +150,10 @@ class MapColumns(StrEnum):
     H = "H"
     I = "I"
     J = "J"
+
+
+class AdminGroup(StrEnum):
+    OWNER = "owner"
+    SENIOR = "senior"
+    JUNIOR = "junior"
+    SPECTATOR = "spectator"
